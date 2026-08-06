@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>noVNC Remote View | FIDS NOC Controller</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text-muted: #94a3b8;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg-dark);
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #vnc-header {
+      background: var(--glass-bg);
+      border-bottom: 1px solid var(--glass-border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      font-size: 20px;
+      color: #38bdf8;
+    }
+    .monitor-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .monitor-ip {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .status-badge {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .status-badge.connecting {
+      background: rgba(251, 191, 36, 0.12);
+      color: #fbbf24;
+      border-color: rgba(251, 191, 36, 0.2);
+    }
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+    #vnc-canvas-container {
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: auto;
+      background: #000;
+      position: relative;
+    }
+    /* Spinner for loading state */
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.05);
+      border-radius: 50%;
+      border-top: 3px solid #38bdf8;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      position: absolute;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .hidden {
+      display: none !important;
+    }
+
+    /* Modal dialog styling for password request */
+    #vnc-auth-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .auth-box {
+      background: rgba(20, 26, 42, 0.95);
+      border: 1px solid var(--glass-border);
+      padding: 30px;
+      border-radius: 16px;
+      width: 320px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      text-align: center;
+    }
+    .auth-box input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      text-align: center;
+      margin-bottom: 20px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    .auth-box input[type="password"]:focus {
+      border-color: #38bdf8;
+    }
+    .auth-box button {
+      width: 100%;
+      padding: 11px;
+      background: #38bdf8;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .auth-box button:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <header id="vnc-header">
+    <div class="brand-section">
+      <i class="fa-solid fa-desktop brand-icon"></i>
+      <div>
+        <h1 class="monitor-title" id="lbl-name">FIDS Monitor Remote View</h1>
+        <span class="monitor-ip" id="lbl-ip">Target: Loading...</span>
+      </div>
+    </div>
+    <div>
+      <span class="status-badge connecting" id="lbl-status">
+        <i class="fa-solid fa-circle-notch fa-spin"></i> Connecting
+      </span>
+    </div>
+  </header>
+
+  <div id="vnc-canvas-container">
+    <div class="spinner" id="vnc-loader"></div>
+  </div>
+
+  <!-- Password Entry Modal Overlay -->
+  <div id="vnc-auth-modal">
+    <div class="auth-box">
+      <i class="fa-solid fa-shield-halved" style="font-size: 32px; color: #fbbf24; margin-bottom: 16px;"></i>
+      <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600;">VNC Authentication</h3>
+      <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 20px 0; line-height: 1.4;">The FIDS PC has password protection enabled. Please enter password below.</p>
+      <input type="password" id="txt-vnc-password" placeholder="Enter VNC Password" autofocus>
+      <button id="btn-submit-pass">Connect Monitor</button>
+    </div>
+  </div>
+
+  <!-- Immediate Query Parsing script -->
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    window.vncIp = urlParams.get('ip') || '127.0.0.1';
+    window.vncName = urlParams.get('name') || 'FIDS-PC';
+    
+    document.getElementById('lbl-name').textContent = `Remote Control: ${window.vncName}`;
+    document.getElementById('lbl-ip').textContent = `IP Target: ${window.vncIp}`;
+  </script>
+
+  <!-- ES6 Loader with jsDelivr bundler bundling -->
+  <script type="module">
+    import RFB from '/novnc-dist/core/rfb.js';
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/vnc/${window.vncIp}`;
+
+    const container = document.getElementById('vnc-canvas-container');
+    const loader = document.getElementById('vnc-loader');
+    const statusLabel = document.getElementById('lbl-status');
+
+    let rfb;
+    try {
+      rfb = new RFB(container, wsUrl);
+
+      rfb.addEventListener('connect', () => {
+        loader.classList.add('hidden');
+        statusLabel.className = 'status-badge connected';
+        statusLabel.innerHTML = '<i class="fa-solid fa-circle-check"></i> Connected';
+      });
+
+      rfb.addEventListener('disconnect', (e) => {
+        loader.classList.add('hidden');
+        statusLabel.className = 'status-badge disconnected';
+        statusLabel.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Disconnected';
+        console.log('noVNC connection closed:', e);
+      });
+
+      // Handle VNC Server password requests
+      rfb.addEventListener('credentialsrequired', () => {
+        console.log('Credentials requested by VNC server');
+        const authModal = document.getElementById('vnc-auth-modal');
+        const submitBtn = document.getElementById('btn-submit-pass');
+        const passInput = document.getElementById('txt-vnc-password');
+
+        authModal.style.display = 'flex';
+        passInput.focus();
+
+        const submitPass = () => {
+          const pass = passInput.value;
+          rfb.sendCredentials({ password: pass });
+          authModal.style.display = 'none';
+          // Cleanup events
+          submitBtn.removeEventListener('click', submitPass);
+        };
+
+        submitBtn.addEventListener('click', submitPass);
+        passInput.addEventListener('keypress', (event) => {
+          if (event.key === 'Enter') {
+            submitPass();
+          }
+        });
+      });
+
+      rfb.scaleViewport = true;
+      rfb.resizeSession = true;
+    } catch (err) {
+      loader.classList.add('hidden');
+      statusLabel.className = 'status-badge disconnected';
+      statusLabel.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Error';
+      console.error('Failed to initialize RFB client:', err);
+    }
+  </script>
+</body>
+</html>

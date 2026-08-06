@@ -1,0 +1,22 @@
+# Environment & Secret files
+.env
+*.env.local
+
+# Database & Volume lokal
+*.sql
+*.sqlite
+db_data/
+mysql/
+
+# File buatan Docker / Build
+*.tar
+*.log
+
+# Node.js (jika aplikasi FIDS berbasis Node.js/React)
+node_modules/
+npm-debug.log
+
+# IDE & Editor
+.vscode/
+.idea/
+.DS_Store

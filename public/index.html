@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aiport Equipment monitoring | Airport Display Heartbeat & Control</title>
+  <!-- Google Fonts: Outfit -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-mode">
+  <div class="glow-bg"></div>
+  
+  <div class="dashboard-container">
+    <!-- Top Nav / Header -->
+    <header class="top-nav">
+      <div class="logo-area">
+        <i class="fa-solid fa-plane-departure brand-icon"></i>
+        <div>
+          <h1>AIRPORT EQUIPMENT MONITORING SYSTEM</h1>
+          <span class="subtitle">Airport Display Network Operations Center</span>
+        </div>
+      </div>
+      <div class="system-time-controls">
+        <div id="live-time" class="time-display">00:00:00</div>
+        <div class="sim-mode-toggle-container tooltip" data-tooltip="Toggle Demo Simulation Mode">
+          <span class="toggle-label">Demo Mode</span>
+          <label class="switch-control">
+            <input type="checkbox" id="sim-mode-checkbox">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <button id="theme-toggle-btn" class="icon-btn tooltip" data-tooltip="Switch Theme">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+        <button id="mute-alert-btn" class="icon-btn tooltip" data-tooltip="Toggle Alert Sound">
+          <i class="fa-solid fa-volume-high"></i>
+        </button>
+        <div id="user-session-wrapper" style="display: flex; align-items: center; gap: 10px;">
+          <button id="open-admin-btn" class="toggle-btn" style="display:flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-screwdriver-wrench"></i> Admin Panel
+          </button>
+          <div id="logged-user-indicator" style="display: none; align-items: center; gap: 8px; font-size: 12px; background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
+            <span>👤 <strong id="logged-username">username</strong> (<span id="logged-role">role</span>)</span>
+            <button onclick="handleUserLogout()" style="background: none; border: none; color: #f87171; cursor: pointer; padding: 0; font-size: 11px; text-decoration: underline; margin-left: 4px;">Logout</button>
+          </div>
+        </div>
+        <span class="connection-pill active" id="ws-status">
+          <span class="pulse-dot"></span> Connected
+        </span>
+      </div>
+    </header>
+
+    <!-- System Selector Navigation Tabs -->
+    <div class="nav-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; flex-wrap: wrap;">
+      <button class="nav-tab active" data-tab="overview" onclick="switchDashboardTab('overview')" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-chart-pie" style="color: #38bdf8;"></i> All Systems Overview</button>
+      <button class="nav-tab" data-tab="FIDS" onclick="switchDashboardTab('FIDS')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-tv" style="color: #3b82f6;"></i> FIDS Monitors</button>
+      <button class="nav-tab" data-tab="IP PABX" onclick="switchDashboardTab('IP PABX')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-phone-volume" style="color: #a855f7;"></i> PABX Telephony</button>
+      <button class="nav-tab" data-tab="CCTV" onclick="switchDashboardTab('CCTV')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-video" style="color: #06b6d4;"></i> CCTV Surveillance</button>
+      <button class="nav-tab" data-tab="Fire Alarm" onclick="switchDashboardTab('Fire Alarm')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-fire-extinguisher" style="color: #ef4444;"></i> Fire Alarm Systems</button>
+      <button class="nav-tab" data-tab="Ping Manager" onclick="switchDashboardTab('Ping Manager')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-gears" style="color: #f59e0b;"></i> Ping Manager</button>
+      <button class="nav-tab" data-tab="Analytics" onclick="switchDashboardTab('Analytics')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-chart-line" style="color: #ec4899;"></i> Analytics & Uptime</button>
+    </div>
+
+    <!-- 📊 Tab 1: All Systems Overview Dashboard -->
+    <div id="overview-tab-content" class="tab-content-panel active">
+      
+      <!-- 🚨 Prioritas Pengecekan: Perangkat Offline & Anomali -->
+      <div id="overview-priority-incidents" class="glass" style="display: none; padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.02); margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <h3 style="margin: 0; color: #f87171; display: flex; align-items: center; gap: 8px; font-size: 16px;">
+            <i class="fa-solid fa-triangle-exclamation fa-beat" style="color: #ef4444;"></i> 
+            Priority Action Required: Offline & Anomalous Devices 
+            <span class="table-tag" id="priority-incident-count" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">0 Issues</span>
+          </h3>
+          <div style="display: flex; gap: 8px; font-size: 11px; color: var(--text-muted);" id="priority-category-breakdown">
+            <!-- Dynamic breakdown summary by type -->
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="premium-table" style="background: transparent; border: none; margin: 0;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <th style="padding: 10px 8px;">Device Name</th>
+                <th style="padding: 10px 8px;">IP Address</th>
+                <th style="padding: 10px 8px;">Type</th>
+                <th style="padding: 10px 8px;">Terminal</th>
+                <th style="padding: 10px 8px;">Location</th>
+                <th style="padding: 10px 8px;">Status / Issue</th>
+                <th style="padding: 10px 8px; text-align: right; width: 120px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="priority-incidents-list">
+              <!-- Dynamically populated offline/anomalous devices -->
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-container" id="priority-incidents-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px;">
+          <!-- Incident table pagination -->
+        </div>
+      </div>
+
+      <!-- Systems Health Summary Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin-bottom: 24px;">
+        
+        <!-- FIDS Systems Status -->
+        <div class="system-summary-card glass fids-system-card" style="padding: 16px; border-radius: 12px; border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; margin: 0; color: #fff;"><i class="fa-solid fa-tv" style="color: #3b82f6; margin-right: 6px;"></i> FIDS Network</h4>
+            <span class="system-tag" id="overview-status-fids" style="font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">ONLINE</span>
+          </div>
+          <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between;"><span>Uptime SLA:</span> <strong id="overview-sla-fids">100.0%</strong></div>
+            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;"><div id="overview-progress-fids" style="width: 100%; height: 100%; background: #3b82f6; transition: width 0.4s;"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+              <span>Total: <strong id="overview-total-fids" style="color: #fff;">0</strong></span>
+              <span>Online: <strong class="text-green" id="overview-online-fids">0</strong></span>
+              <span>Offline: <strong class="text-red" id="overview-offline-fids">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- IP PABX Systems Status -->
+        <div class="system-summary-card glass pabx-system-card" style="padding: 16px; border-radius: 12px; border-left: 4px solid #a855f7; background: rgba(168, 85, 247, 0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; margin: 0; color: #fff;"><i class="fa-solid fa-phone-volume" style="color: #a855f7; margin-right: 6px;"></i> PABX Telephony</h4>
+            <span class="system-tag" id="overview-status-pabx" style="font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">ONLINE</span>
+          </div>
+          <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between;"><span>Uptime SLA:</span> <strong id="overview-sla-pabx">100.0%</strong></div>
+            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;"><div id="overview-progress-pabx" style="width: 100%; height: 100%; background: #a855f7; transition: width 0.4s;"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+              <span>Total: <strong id="overview-total-pabx" style="color: #fff;">0</strong></span>
+              <span>Online: <strong class="text-green" id="overview-online-pabx">0</strong></span>
+              <span>Offline: <strong class="text-red" id="overview-offline-pabx">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CCTV Systems Status -->
+        <div class="system-summary-card glass cctv-system-card" style="padding: 16px; border-radius: 12px; border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; margin: 0; color: #fff;"><i class="fa-solid fa-video" style="color: #06b6d4; margin-right: 6px;"></i> CCTV Surveillance</h4>
+            <span class="system-tag" id="overview-status-cctv" style="font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">ONLINE</span>
+          </div>
+          <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between;"><span>Uptime SLA:</span> <strong id="overview-sla-cctv">100.0%</strong></div>
+            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;"><div id="overview-progress-cctv" style="width: 100%; height: 100%; background: #06b6d4; transition: width 0.4s;"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+              <span>Total: <strong id="overview-total-cctv" style="color: #fff;">0</strong></span>
+              <span>Online: <strong class="text-green" id="overview-online-cctv">0</strong></span>
+              <span>Offline: <strong class="text-red" id="overview-offline-cctv">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fire Alarm Systems Status -->
+        <div class="system-summary-card glass firealarm-system-card" style="padding: 16px; border-radius: 12px; border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; margin: 0; color: #fff;"><i class="fa-solid fa-fire-extinguisher" style="color: #ef4444; margin-right: 6px;"></i> Fire Alarm Systems</h4>
+            <span class="system-tag" id="overview-status-firealarm" style="font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">ONLINE</span>
+          </div>
+          <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between;"><span>Uptime SLA:</span> <strong id="overview-sla-firealarm">100.0%</strong></div>
+            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;"><div id="overview-progress-firealarm" style="width: 100%; height: 100%; background: #ef4444; transition: width 0.4s;"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+              <span>Total: <strong id="overview-total-firealarm" style="color: #fff;">0</strong></span>
+              <span>Online: <strong class="text-green" id="overview-online-firealarm">0</strong></span>
+              <span>Offline: <strong class="text-red" id="overview-offline-firealarm">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Server Performance & Operational Health Split -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 24px;" class="desktop-column-layout">
+        
+        <!-- Server Performance Monitor -->
+        <div class="glass" style="padding: 24px; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between;">
+          <div class="container-title" style="margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+            <h3><i class="fa-solid fa-server" style="color: #10b981; margin-right: 6px;"></i> Server Performance Metrics</h3>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 16px; justify-content: center; flex-grow: 1;">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                <span>CPU Load:</span> <strong id="srv-cpu-usage">0.0%</strong>
+              </div>
+              <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                <div id="srv-cpu-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.5s;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                <span>RAM Usage:</span> <strong id="srv-ram-usage">0.0% / 0.0 GB</strong>
+              </div>
+              <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                <div id="srv-ram-bar" style="width: 0%; height: 100%; background: #06b6d4; transition: width 0.5s;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health Radial dial -->
+        <div class="glass" style="padding: 24px; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; min-height: 250px;">
+          <div class="container-title" style="margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+            <h3>System-Wide Health</h3>
+          </div>
+          <div style="display: flex; justify-content: space-around; align-items: center; height: 100%; flex-wrap: wrap; gap: 16px;">
+            <div style="text-align: center;">
+              <div class="sla-circular-progress" id="global-health-radial" style="width: 110px; height: 110px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(closest-side, var(--glass-bg) 79%, transparent 80% 100%), conic-gradient(#10b981 0%, rgba(255,255,255,0.05) 0%); margin: 0 auto; box-shadow: 0 0 20px rgba(16, 185, 129, 0.15); transition: background 0.4s ease;">
+                <span class="radial-value text-green" id="global-health-val" style="font-size: 22px; font-weight: 800;">0%</span>
+              </div>
+              <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 8px;">Average SLA Status</span>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <span style="color:var(--text-muted); font-size: 10px; display:block; text-transform: uppercase; letter-spacing: 1px;">Infrastructure Nodes</span>
+                <strong style="font-size: 18px; color: #fff;" id="global-stats-ratio">0/0 Active</strong>
+              </div>
+              <div>
+                <span style="color:var(--text-muted); font-size: 10px; display:block; text-transform: uppercase; letter-spacing: 1px;">NOC Alert Events</span>
+                <strong style="font-size: 18px;" id="global-stats-anomalies" class="text-yellow">0 Anomalies</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Overview Recent Log Event stream -->
+        <div class="glass" style="padding: 24px; border-radius: 12px; max-height: 290px; display: flex; flex-direction: column;">
+          <div class="container-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+            <h3>NOC Critical Incidents</h3>
+            <span class="live-pill" style="font-size: 9px; padding: 2px 6px;"><span class="pulse-dot"></span> Live</span>
+          </div>
+          <div id="overview-recent-logs" class="log-entries" style="overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Live seeds populate here -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- 💻 Tab 2: Detailed Monitoring View tab panel wrapper (for specific systems) -->
+    <div id="system-detail-tab-content" style="display: none;">
+
+    <!-- Top Bar / Summary Cards -->
+    <section class="summary-grid">
+      <div class="summary-card glass">
+        <div class="card-icon blue"><i class="fa-solid fa-tv"></i></div>
+        <div class="card-data">
+          <h3>Total FIDS Displays</h3>
+          <p id="total-fids" class="counter">0</p>
+          <span class="card-info">Monitored IP targets</span>
+        </div>
+      </div>
+      <div class="summary-card glass">
+        <div class="card-icon green"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="card-data">
+          <h3>Online</h3>
+          <p id="online-fids" class="counter text-green">0</p>
+          <span id="online-pct" class="card-info text-green">0% Connected</span>
+        </div>
+      </div>
+      <div class="summary-card glass">
+        <div class="card-icon red"><i class="fa-solid fa-circle-xmark"></i></div>
+        <div class="card-data">
+          <h3>Offline</h3>
+          <p id="offline-fids" class="counter text-red">0</p>
+          <span id="offline-pct" class="card-info text-red">0% Down</span>
+        </div>
+      </div>
+      <div class="summary-card glass">
+        <div class="card-icon yellow"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="card-data">
+          <h3>Anomalies</h3>
+          <p id="anomaly-fids" class="counter text-yellow">0</p>
+          <span id="anomaly-info" class="card-info text-yellow">Require action</span>
+        </div>
+      </div>
+      <div class="summary-card glass">
+        <div class="card-icon purple"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="card-data">
+          <h3>Avg Uptime</h3>
+          <p id="avg-uptime" class="counter text-purple">0%</p>
+          <span class="card-info">Target SLA: 99.0%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Toast Alert Center (For popups) -->
+    <div id="alert-banner-container"></div>
+
+    <!-- Main Workspace -->
+    <div class="main-content-layout">
+      
+      <!-- Left side: Visualizations & Map/Grid -->
+      <div class="content-left">
+        <!-- View Toggle & Filters -->
+        <div class="workspace-header glass">
+          <div class="view-toggles">
+            <button id="btn-grid-mode" class="toggle-btn active"><i class="fa-solid fa-grip"></i> Grid Mode</button>
+            <button id="btn-map-mode" class="toggle-btn"><i class="fa-solid fa-map-location-dot"></i> Map Mode</button>
+          </div>
+          <div class="terminal-filters">
+            <button class="filter-btn active" data-terminal="ALL">All Terminal</button>
+            <button class="filter-btn" data-terminal="T1">Terminal 1</button>
+            <button class="filter-btn" data-terminal="T2">Perkantoran Bandara</button>
+            <button class="filter-btn" data-terminal="T3">Luar Gedung Terminal</button>
+          </div>
+        </div>
+
+        <!-- Grid Container -->
+        <div id="fids-grid-view" class="view-panel active">
+          <div class="grid-layout" id="fids-grid">
+            <!-- Dynamically populated -->
+          </div>
+          <div class="pagination-container" id="grid-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;"></div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="fids-map-view" class="view-panel">
+          <div class="map-layout glass">
+            <div class="terminal-maps">
+              
+              <!-- Terminal 1 Floorplan -->
+              <div class="terminal-section" id="map-T1">
+                <h4>Terminal 1 (Domestic)</h4>
+                <div class="floorplan-outline">
+                  <div class="runway-decorator">RUNWAY 07L/25R</div>
+                  <div class="map-nodes-container" id="nodes-T1">
+                    <!-- Dynamically positioned nodes -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Terminal Perkantoran Bandara Floorplan -->
+              <div class="terminal-section" id="map-T2">
+                <h4>Perkantoran Bandara</h4>
+                <div class="floorplan-outline">
+                  <div class="map-nodes-container" id="nodes-T2">
+                    <!-- Dynamically positioned nodes -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Luar Gedung Terminal Floorplan -->
+              <div class="terminal-section" id="map-T3">
+                <h4>Luar Gedung Terminal</h4>
+                <div class="floorplan-outline">
+                  <div class="map-nodes-container" id="nodes-T3">
+                    <!-- Dynamically positioned nodes -->
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right side: Chart Trends & System Operations Logs -->
+      <div class="content-right">
+        <!-- Downtime Chart -->
+        <div class="chart-container glass">
+          <div class="container-title">
+            <h3>Downtime & Alert Distribution</h3>
+            <i class="fa-solid fa-circle-info tooltip" data-tooltip="Real-time distribution chart of FIDS status anomalies"></i>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="downtimeChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Real-time Activity Feeds -->
+        <div class="logs-feed glass">
+          <div class="container-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3>NOC Activity Logs</h3>
+              <span class="live-pill"><span class="pulse-dot"></span> Live Feed</span>
+            </div>
+            <button id="open-all-logs-btn" class="text-btn" style="font-size: 11px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); padding: 4px 10px; border-radius: 4px; color: #38bdf8; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"><i class="fa-solid fa-list"></i> View All</button>
+          </div>
+          <div class="log-entries" id="logs-container">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom View: Main Devices Detailed Table -->
+    <section class="bottom-table-section glass">
+      <div class="table-header">
+        <div class="title-search">
+          <h2>All Target Monitor Inventories</h2>
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="table-search" placeholder="Search by name, IP, or location...">
+          </div>
+        </div>
+        <div class="table-actions">
+          <span class="table-count" id="table-row-count">Showing 0 devices</span>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="premium-table">
+          <thead>
+            <tr>
+              <th>Device Status</th>
+              <th>IP Address</th>
+              <th>Device Name</th>
+              <th>Equipment Type</th>
+              <th>Terminal</th>
+              <th>Location</th>
+              <th>Downtime (Today)</th>
+              <th>Failed Access</th>
+              <th>Anomaly Detected</th>
+              <th style="text-align: right;">System Operations Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fids-table-body">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination-container" id="table-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;"></div>
+    </section>
+  </div>
+  </div><!-- /#system-detail-tab-content -->
+
+  <!-- ⚙️ Tab 6: Ping Scheduler & Performance Manager -->
+  <div id="ping-manager-tab-content" class="tab-content-panel" style="display: none;">
+    <!-- Top Grid: Configurations -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px;">
+
+
+      <!-- Ping Scheduler Configurations -->
+      <div class="glass" style="padding: 20px; border-radius: 12px;">
+        <div class="container-title" style="margin-bottom: 16px;">
+          <h3><i class="fa-solid fa-sliders" style="color: #f59e0b; margin-right: 6px;"></i> Scheduler Configurations</h3>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <label for="cfg-batch-size">Batch Size (Per Group):</label>
+            <input type="number" id="cfg-batch-size" min="5" max="100" style="width: 80px; padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <label for="cfg-ping-interval">Ping Interval (Milliseconds):</label>
+            <input type="number" id="cfg-ping-interval" min="2000" max="60000" step="1000" style="width: 80px; padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+          </div>
+          <button onclick="saveSchedulerConfig()" class="save-btn" style="margin-top: 6px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px;"><i class="fa-solid fa-floppy-disk"></i> Save Configurations</button>
+        </div>
+      </div>
+
+      <!-- Telegram Bot Configurations -->
+      <div class="glass" style="padding: 20px; border-radius: 12px;">
+        <div class="container-title" style="margin-bottom: 16px;">
+          <h3><i class="fa-solid fa-paper-plane" style="color: #38bdf8; margin-right: 6px;"></i> Telegram Group Alerts</h3>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <label for="cfg-tg-enabled">Enable Telemetry Notifications:</label>
+            <label class="switch-control">
+              <input type="checkbox" id="cfg-tg-enabled">
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label for="cfg-tg-token">Bot Token API:</label>
+            <input type="password" id="cfg-tg-token" placeholder="123456789:ABCdefGhI..." style="padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-family: monospace;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label for="cfg-tg-chatid">Group Chat ID (Include negative prefix):</label>
+            <input type="text" id="cfg-tg-chatid" placeholder="-100123456789" style="padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-family: monospace;">
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button onclick="saveSchedulerConfig()" class="save-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px;"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+            <button onclick="testTelegramAlert()" class="test-tg-btn" style="flex: 1; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; cursor: pointer; transition: all 0.2s; font-size: 13px;"><i class="fa-solid fa-paper-plane"></i> Test Send</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Visualization: Batches Load Balancer -->
+    <div class="glass" style="padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+      <div class="container-title" style="margin-bottom: 16px;">
+        <h3><i class="fa-solid fa-layer-group" style="color: #c084fc; margin-right: 6px;"></i> Active Ping Execution Batches</h3>
+        <span style="font-size: 11px; color: var(--text-muted);">Visualizer of active scheduler load balancing groups.</span>
+      </div>
+      <div id="batches-visualizer-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
+        <!-- Dynamic batch cards -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 📈 Tab 7: Uptime & Performance Analytics -->
+  <div id="analytics-tab-content" class="tab-content-panel" style="display: none;">
+    <!-- Selector & Summary Cards -->
+    <div class="glass" style="padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+        <div>
+          <h3 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px;"><i class="fa-solid fa-chart-line" style="color: #ec4899;"></i> Equipment Reliability & Availability Analytics</h3>
+          <span style="font-size: 11px; color: var(--text-muted);">Monitor and analyze availability trends and failure cycles (MTBF/MTTR).</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <label for="analytics-device-select" style="font-size: 13px; font-weight: 600;">Select Equipment:</label>
+          <select id="analytics-device-select" onchange="loadDeviceAnalytics()" style="padding: 8px 12px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; outline: none; font-size: 13px; min-width: 220px;">
+            <!-- Options loaded dynamically -->
+          </select>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+        <!-- Card 1: Availability -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 16px; border-radius: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Operational Availability</div>
+          <div id="analytics-avail-val" style="font-size: 28px; font-weight: 700; color: #10b981;">100.00%</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Target: &ge; 99.9% (SLA Excellent)</div>
+        </div>
+
+        <!-- Card 2: MTBF -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 16px; border-radius: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">MTBF (Mean Time Between Failure)</div>
+          <div id="analytics-mtbf-val" style="font-size: 24px; font-weight: 700; color: #3b82f6;">86,400s</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Avg run duration before next crash</div>
+        </div>
+
+        <!-- Card 3: MTTR -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 16px; border-radius: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">MTTR (Mean Time To Repair)</div>
+          <div id="analytics-mttr-val" style="font-size: 24px; font-weight: 700; color: #f59e0b;">0s</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Avg technician recovery duration</div>
+        </div>
+
+        <!-- Card 4: Health Rate Grade -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 16px; border-radius: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Facility Health Category</div>
+          <div id="analytics-health-grade" style="font-size: 20px; font-weight: 700; color: #10b981; margin: 4px 0;">EXCELLENT</div>
+          <span id="analytics-health-badge" class="table-tag" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25); font-size: 9px; padding: 2px 8px; border-radius: 20px;">Sangat Sehat</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart & Logs List Grid -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; flex-wrap: wrap;">
+      <!-- Chart Card -->
+      <div class="glass" style="padding: 20px; border-radius: 12px; display: flex; flex-direction: column;">
+        <div style="margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 15px;"><i class="fa-solid fa-chart-area" style="color: #ec4899; margin-right: 6px;"></i> 7-Day Uptime Percentage Trend</h3>
+        </div>
+        <div style="flex-grow: 1; min-height: 280px; position: relative;">
+          <canvas id="analyticsChart" style="max-height: 280px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Historical Log List Card -->
+      <div class="glass" style="padding: 20px; border-radius: 12px; display: flex; flex-direction: column;">
+        <div style="margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 15px;"><i class="fa-solid fa-history" style="color: #a78bfa; margin-right: 6px;"></i> Daily Reliability Logs</h3>
+        </div>
+        <div id="analytics-history-list" style="flex-grow: 1; height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 12px;">
+          <!-- Historical logs loaded dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Console CRUD Modal -->
+  <div id="admin-modal" class="modal-overlay">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-screwdriver-wrench"></i> FIDS Database Admin Console</h2>
+        <button id="close-admin-btn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body-layout">
+        <!-- Left form to add/edit device -->
+        <div class="admin-form-panel">
+          <h3 id="form-title">Register New Monitor</h3>
+          <form id="device-form" class="admin-form">
+            <input type="hidden" id="edit-device-id" value="">
+            <div class="form-group">
+              <label for="device-ip">IP Address</label>
+              <input type="text" id="device-ip" placeholder="e.g. 172.23.5.15" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+            </div>
+            <div class="form-group">
+              <label for="device-name">Device Name</label>
+              <input type="text" id="device-name" placeholder="e.g. FIDS-T1-Gate-02B" required>
+            </div>
+            <div class="form-group">
+              <label for="device-equipment-type">Equipment Type</label>
+              <select id="device-equipment-type" required>
+                <option value="Server FIDS">Server FIDS</option>
+                <option value="FIDS">FIDS Display</option>
+                <option value="IP PABX">IP PABX Telephony</option>
+                <option value="Server CCTV">Server CCTV NVR</option>
+                <option value="CCTV">CCTV IP Camera</option>
+                <option value="Server Fire Alarm System">Server FAS Main</option>
+                <option value="Fire Alarm System">FAS Detector/Siren</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="device-terminal">Terminal</label>
+              <select id="device-terminal" required>
+                <option value="T1">Terminal 1</option>
+                <option value="T2">Perkantoran Bandara</option>
+                <option value="T3">Luar Gedung Terminal</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="device-location">Location Detail</label>
+              <input type="text" id="device-location" placeholder="e.g. Gate 2 Departure Lounge" required>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="cancel-edit-btn" class="cancel-btn hidden">Cancel</button>
+              <button type="submit" id="submit-device-btn" class="save-btn">Save Monitor</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Right table to list and edit/delete -->
+        <div class="admin-list-panel">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+            <h3 style="margin: 0;">Registered Devices List</h3>
+            <div style="font-size: 11px; color: var(--text-muted);" id="admin-device-count-badge">Total: 0 devices</div>
+          </div>
+
+          <!-- Search, Filter & Page Size Bar -->
+          <div style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+            <div style="position: relative; flex: 1; min-width: 150px;">
+              <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 11px;"></i>
+              <input type="text" id="admin-search-input" placeholder="Search name or IP..." style="width: 100%; padding: 6px 10px 6px 28px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 12px; box-sizing: border-box;" oninput="onAdminFilterChange()">
+            </div>
+            <select id="admin-type-filter" style="padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 12px;" onchange="onAdminFilterChange()">
+              <option value="ALL">All Equipment Types</option>
+              <option value="FIDS">FIDS</option>
+              <option value="Server CCTV">Server CCTV</option>
+              <option value="CCTV">CCTV</option>
+              <option value="IP PABX">IP PABX</option>
+              <option value="Fire Alarm System">Fire Alarm System</option>
+            </select>
+            <select id="admin-page-size" style="padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 12px;" onchange="onAdminPageSizeChange()">
+              <option value="10" selected>10 per page</option>
+              <option value="25">25 per page</option>
+              <option value="ALL">All items</option>
+            </select>
+          </div>
+
+          <div class="admin-list-scroll">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Device Name</th>
+                  <th>IP Address</th>
+                  <th>Type</th>
+                  <th>Terminal</th>
+                  <th style="text-align: right;">Operations</th>
+                </tr>
+              </thead>
+              <tbody id="admin-devices-list">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Footer -->
+          <div id="admin-pagination-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; gap: 8px;">
+            <span id="admin-pagination-info">Showing 0-0 of 0</span>
+            <div style="display: flex; gap: 6px; align-items: center;" id="admin-pagination-buttons">
+              <!-- Prev/Next buttons populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <!-- Live Ping Diagnostics Modal -->
+  <div id="ping-modal" class="modal-overlay">
+    <div class="modal-content glass" style="max-width: 500px; padding: 20px;">
+      <div class="modal-header" style="margin-bottom: 12px; padding-bottom: 10px;">
+        <h2><i class="fa-solid fa-terminal" style="color: #38bdf8;"></i> Connection Diagnostic</h2>
+        <button id="close-ping-btn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="ping-modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <div class="ping-target-info" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);">
+          <div>
+            <strong id="ping-modal-name" style="font-size: 15px; display: block;">Device Name</strong>
+            <span id="ping-modal-ip" style="font-size: 11px; color: var(--text-muted); font-family: monospace;">172.23.5.10</span>
+          </div>
+          <span class="table-tag" id="ping-modal-terminal" style="font-size: 10px;">T3</span>
+        </div>
+        <div class="ping-console" id="ping-console-output" style="background: #04050a; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; font-family: monospace; font-size: 11px; color: #10b981; min-height: 140px; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.4;">
+          <!-- Diagnostics log output prints here -->
+        </div>
+        <div class="ping-summary" id="ping-summary-output" style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.1); border-radius: 8px; padding: 10px 14px; font-size: 12px; display: none; flex-direction: column; gap: 4px;">
+          <!-- Summary statistics print here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device Activity History Modal -->
+  <div id="device-logs-modal" class="modal-overlay">
+    <div class="modal-content glass" style="max-width: 600px; padding: 20px;">
+      <div class="modal-header" style="margin-bottom: 12px; padding-bottom: 10px;">
+        <h2><i class="fa-solid fa-clock-rotate-left" style="color: #a78bfa;"></i> Device Activity History</h2>
+        <button id="close-device-logs-btn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="ping-modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <div class="ping-target-info" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);">
+          <div>
+            <strong id="device-logs-name" style="font-size: 15px; display: block;">Device Name</strong>
+            <span id="device-logs-ip" style="font-size: 11px; color: var(--text-muted); font-family: monospace;">172.23.5.10</span>
+          </div>
+          <span class="table-tag" id="device-logs-terminal" style="font-size: 10px;">T3</span>
+        </div>
+        <div class="log-entries" id="device-logs-output" style="height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; background: rgba(0,0,0,0.15);">
+          <!-- Device logs list will print here -->
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- All NOC Activity Logs Modal -->
+  <div id="all-logs-modal" class="modal-overlay">
+    <div class="modal-content glass" style="max-width: 800px; width: 90%; padding: 20px;">
+      <div class="modal-header" style="margin-bottom: 12px; padding-bottom: 10px;">
+        <h2><i class="fa-solid fa-list-check" style="color: #38bdf8;"></i> All NOC Activity Logs</h2>
+        <button id="close-all-logs-btn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="ping-modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+          <table class="premium-table">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Timestamp</th>
+                <th style="width: 180px;">Device Name</th>
+                <th style="width: 100px;">Status</th>
+                <th>Activity Message</th>
+              </tr>
+            </thead>
+            <tbody id="all-logs-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-container" id="all-logs-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px;">
+          <!-- Pagination controls -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Administrative Session Auth Login Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-content glass" style="max-width: 400px; padding: 24px; border: 1px solid rgba(56, 189, 248, 0.2);">
+      <div class="modal-header" style="margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <h2 style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 0; color: #fff;">
+          <i class="fa-solid fa-lock" style="color: #38bdf8;"></i> Admin Portal Login
+        </h2>
+        <button id="close-login-btn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="login-form" onsubmit="handleLoginSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="login-username" style="font-size: 12px; color: var(--text-muted);">Username</label>
+          <input type="text" id="login-username" required placeholder="Enter username..." style="padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="login-password" style="font-size: 12px; color: var(--text-muted);">Password</label>
+          <input type="password" id="login-password" required placeholder="Enter password..." style="padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+        </div>
+        <div id="login-error-msg" style="color: #f87171; font-size: 12px; display: none; text-align: center;">
+          Invalid credentials. Please try again.
+        </div>
+        <button type="submit" class="save-btn" style="width: 100%; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; font-size: 14px;"><i class="fa-solid fa-right-to-bracket"></i> Authenticate Session</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- CCTV / IP Camera Proxy Viewer Modal -->
+  <div id="cctv-view-modal" class="modal-overlay">
+    <div class="modal-content glass" style="max-width:960px;width:95%;height:88vh;display:flex;flex-direction:column;padding:0;box-sizing:border-box;overflow:hidden;border-radius:16px;">
+
+      <!-- Header -->
+      <div id="cctv-modal-header" style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;background:rgba(9,13,22,0.6);">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+          <div id="cctv-status-dot" style="width:10px;height:10px;border-radius:50%;background:#6b7280;flex-shrink:0;transition:background 0.4s;box-shadow:0 0 0 0 transparent;"></div>
+          <i class="fa-solid fa-video" id="cctv-view-modal-icon" style="color:#38bdf8;font-size:16px;flex-shrink:0;"></i>
+          <div style="min-width:0;">
+            <div id="cctv-view-modal-title" style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Camera View</div>
+            <div id="cctv-modal-subtitle" style="font-size:11px;color:var(--text-muted);margin-top:1px;">Connecting via server proxy...</div>
+          </div>
+        </div>
+        <!-- Stream type toggle -->
+        <div style="display:flex;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px;gap:2px;flex-shrink:0;">
+          <button id="cctv-mode-webui" onclick="setCctvMode('webui')" style="padding:4px 10px;font-size:11px;border-radius:6px;border:none;cursor:pointer;background:rgba(56,189,248,0.2);color:#38bdf8;font-weight:600;">
+            <i class="fa-solid fa-globe"></i> Web UI
+          </button>
+          <button id="cctv-mode-mjpeg" onclick="setCctvMode('mjpeg')" style="padding:4px 10px;font-size:11px;border-radius:6px;border:none;cursor:pointer;background:transparent;color:var(--text-muted);">
+            <i class="fa-solid fa-film"></i> MJPEG
+          </button>
+        </div>
+        <!-- Action buttons -->
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button id="cctv-refresh-btn" onclick="refreshCctvView()" title="Refresh" style="padding:6px 10px;font-size:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:var(--text-muted);cursor:pointer;">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+          <button id="cctv-view-new-tab-btn" title="Open in new tab" style="padding:6px 10px;font-size:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:var(--text-muted);cursor:pointer;">
+            <i class="fa-solid fa-up-right-from-square"></i>
+          </button>
+          <button id="close-cctv-view-btn" title="Close" style="padding:6px 10px;font-size:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:var(--text-muted);cursor:pointer;">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div style="flex:1;position:relative;background:#04050a;overflow:hidden;">
+
+        <!-- Loading overlay -->
+        <div id="cctv-loading-overlay" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(9,13,22,0.97);z-index:10;gap:16px;">
+          <div style="width:48px;height:48px;border:3px solid rgba(56,189,248,0.2);border-top-color:#38bdf8;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+          <div>
+            <div style="font-size:14px;color:#fff;text-align:center;font-weight:500;">Connecting to Camera</div>
+            <div id="cctv-loading-detail" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:4px;">Checking reachability via proxy...</div>
+          </div>
+        </div>
+
+        <!-- Error overlay -->
+        <div id="cctv-error-overlay" style="position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(9,13,22,0.97);z-index:10;gap:12px;padding:30px;text-align:center;">
+          <div style="width:60px;height:60px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-video-slash" style="font-size:24px;color:#ef4444;"></i>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:6px;">Camera Unreachable</div>
+            <div id="cctv-error-detail" style="font-size:12px;color:var(--text-muted);max-width:440px;line-height:1.6;">Server could not connect to the camera. The device may be offline or on an unreachable subnet.</div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px;">
+            <button onclick="refreshCctvView()" style="padding:8px 18px;font-size:12px;border-radius:8px;border:1px solid #38bdf8;background:rgba(56,189,248,0.1);color:#38bdf8;cursor:pointer;"><i class="fa-solid fa-rotate-right"></i> Retry</button>
+            <a id="cctv-view-fallback-link" href="" target="_blank" style="padding:8px 18px;font-size:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:var(--text-muted);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;"><i class="fa-solid fa-up-right-from-square"></i> Open Direct</a>
+          </div>
+        </div>
+
+        <!-- MJPEG / Stream view -->
+        <div id="cctv-mjpeg-view" style="display:none;width:100%;height:100%;flex-direction:column;overflow:hidden;">
+
+          <!-- Stream controls toolbar -->
+          <div style="padding:10px 16px;background:rgba(0,0,0,0.4);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">
+            <!-- Stream type -->
+            <div style="display:flex;background:rgba(255,255,255,0.05);border-radius:6px;padding:2px;gap:1px;">
+              <button id="stream-type-mjpeg" onclick="setStreamType('mjpeg')" style="padding:3px 8px;font-size:10px;border-radius:5px;border:none;cursor:pointer;background:rgba(56,189,248,0.2);color:#38bdf8;font-weight:600;">▶ MJPEG Live</button>
+              <button id="stream-type-snapshot" onclick="setStreamType('snapshot')" style="padding:3px 8px;font-size:10px;border-radius:5px;border:none;cursor:pointer;background:transparent;color:var(--text-muted);">📷 Snapshot</button>
+            </div>
+            <!-- Path selector -->
+            <select id="stream-path-select" onchange="onStreamPathChange()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;flex:1;min-width:160px;max-width:280px;">
+              <option value="">-- Select stream path --</option>
+            </select>
+            <!-- Manual path input -->
+            <input id="stream-path-manual" type="text" placeholder="/videostream.cgi" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;width:160px;" oninput="onManualPathInput()">
+            <!-- Scan button -->
+            <button id="stream-scan-btn" onclick="scanStreamPaths()" style="padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid rgba(56,189,248,0.3);background:rgba(56,189,248,0.1);color:#38bdf8;cursor:pointer;white-space:nowrap;">
+              <i class="fa-solid fa-magnifying-glass"></i> Scan Paths
+            </button>
+            <!-- Apply/Load button -->
+            <button onclick="applyStreamPath()" style="padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.1);color:#22c55e;cursor:pointer;">
+              <i class="fa-solid fa-play"></i> Load
+            </button>
+            <!-- Snapshot interval (shown only in snapshot mode) -->
+            <div id="snapshot-interval-ctrl" style="display:none;align-items:center;gap:6px;">
+              <span style="font-size:10px;color:var(--text-muted);">Refresh:</span>
+              <select id="snapshot-interval-select" onchange="setSnapshotInterval()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:2px 6px;border-radius:5px;font-size:11px;">
+                <option value="1000">1s</option>
+                <option value="2000" selected>2s</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Scan results panel (hidden by default) -->
+          <div id="stream-scan-panel" style="display:none;padding:10px 16px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;max-height:130px;overflow-y:auto;">
+            <div id="stream-scan-results" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+
+          <!-- Stream display area -->
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#000;">
+            <!-- MJPEG live img -->
+            <img id="cctv-mjpeg-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;display:none;" onerror="onMjpegImgError()">
+            <!-- Snapshot img (refreshed periodically) -->
+            <img id="cctv-snapshot-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;display:none;" onerror="onSnapshotImgError()">
+            <!-- No stream selected placeholder -->
+            <div id="stream-placeholder" style="text-align:center;color:var(--text-muted);">
+              <i class="fa-solid fa-film" style="font-size:40px;opacity:0.3;margin-bottom:12px;display:block;"></i>
+              <div style="font-size:13px;">Click <b style="color:#38bdf8;">Scan Paths</b> to detect available streams,<br>or enter a path manually and click <b style="color:#22c55e;">Load</b>.</div>
+            </div>
+            <!-- Stream status badge -->
+            <div id="stream-status-badge" style="position:absolute;bottom:10px;right:10px;padding:4px 10px;border-radius:20px;font-size:10px;display:none;background:rgba(0,0,0,0.7);gap:6px;align-items:center;">
+              <span id="stream-status-dot" style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;"></span>
+              <span id="stream-status-text">Live</span>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Web UI iframe -->
+        <iframe id="cctv-view-iframe" src="" style="width:100%;height:100%;border:none;display:block;"
+          onload="onCctvIframeLoad()" onerror="onCctvIframeError()">
+        </iframe>
+
+      </div>
+
+      <!-- Footer status bar -->
+      <div style="padding:8px 16px;border-top:1px solid rgba(255,255,255,0.05);background:rgba(9,13,22,0.6);display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <span style="font-size:10px;color:var(--text-muted);" id="cctv-proxy-info">Routing via server proxy</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text-muted);" id="cctv-latency-info"></span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Audio Alert files (Using high quality synthesized synth blips via Web Audio API, no external downloads needed!) -->
+  <script src="app.js"></script>
+</body>
+</html>

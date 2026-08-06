@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Web App Server (PHP 8.0.30)
+  web:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - db
+
+  # Database Engine (MariaDB/MySQL)
+  db:
+    image: mariadb:10.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: fids_monitoring
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  # Interface phpMyAdmin
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: root
+    depends_on:
+      - db
+
+volumes:
+  db_data:
