@@ -4,6 +4,7 @@
 
 # Database & Volume lokal
 *.sql
+!database.sql
 *.sqlite
 db_data/
 mysql/

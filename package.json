@@ -4,7 +4,9 @@
   "description": "FIDS Monitoring Dashboard with Node.js and MySQL",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "sync:db": "node scripts/sync-database.js",
+    "postinstall": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
