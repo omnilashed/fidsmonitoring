@@ -189,7 +189,15 @@ async function importWithMysql2(sqlContent) {
 
     const statements = splitSqlStatements(sqlContent);
     for (const statement of statements) {
-      await connection.query(statement);
+      try {
+        await connection.query(statement);
+      } catch (error) {
+        if (error.message && error.message.includes('Cannot delete or update a parent row')) {
+          console.warn('Lewati statement yang gagal karena constraint foreign key:', statement.split('\n')[0]);
+          continue;
+        }
+        throw error;
+      }
     }
   } finally {
     await connection.end();
