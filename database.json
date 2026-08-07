@@ -79,7 +79,7 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
+      "uptime_pct": "83.48",
       "downtime_count": 1,
       "failed_access_count": 2,
       "health_status_detail": null
