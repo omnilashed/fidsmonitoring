@@ -1,62 +1,6 @@
 {
   "devices": [
     {
-      "id": 1,
-      "ip_address": "172.23.1.10",
-      "name": "FIDS-T1-Checkin-01",
-      "location": "Check-in Desk Row A",
-      "terminal": "T1",
-      "status": "Offline",
-      "anomaly_type": null,
-      "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
-      "failed_access_count": 1,
-      "health_status_detail": null
-    },
-    {
-      "id": 2,
-      "ip_address": "172.23.1.20",
-      "name": "FIDS-T1-Gate-01A",
-      "location": "Gate 1A Departure",
-      "terminal": "T1",
-      "status": "Offline",
-      "anomaly_type": null,
-      "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
-      "failed_access_count": 1,
-      "health_status_detail": null
-    },
-    {
-      "id": 3,
-      "ip_address": "172.23.1.30",
-      "name": "FIDS-T2-Checkin-05",
-      "location": "Check-in Desk 5",
-      "terminal": "T2",
-      "status": "Offline",
-      "anomaly_type": null,
-      "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 0,
-      "failed_access_count": 13,
-      "health_status_detail": null
-    },
-    {
-      "id": 4,
-      "ip_address": "172.23.1.60",
-      "name": "FIDS-T2-Gate-02",
-      "location": "Gate 2 Boarding Lounge",
-      "terminal": "T2",
-      "status": "Offline",
-      "anomaly_type": null,
-      "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
-      "failed_access_count": 1,
-      "health_status_detail": null
-    },
-    {
       "id": 5,
       "ip_address": "172.23.1.100",
       "name": "FIDS-T3-Checkin-01",
@@ -65,8 +9,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 3,
       "health_status_detail": null
     },
@@ -79,8 +23,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "83.48",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 2,
       "health_status_detail": null
     },
@@ -93,8 +37,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -107,8 +51,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 5,
       "health_status_detail": null
     },
@@ -121,8 +65,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -135,8 +79,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -149,8 +93,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -163,8 +107,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -177,8 +121,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "IP PABX",
-      "uptime_pct": "84.22",
-      "downtime_count": 2,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 2,
       "health_status_detail": null
     },
@@ -191,8 +135,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "IP PABX",
-      "uptime_pct": "84.22",
-      "downtime_count": 2,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 2,
       "health_status_detail": null
     },
@@ -205,8 +149,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server CCTV",
-      "uptime_pct": "84.22",
-      "downtime_count": 2,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 2,
       "health_status_detail": null
     },
@@ -219,8 +163,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server CCTV",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -233,8 +177,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "CCTV",
-      "uptime_pct": "84.22",
-      "downtime_count": 2,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 4,
       "health_status_detail": null
     },
@@ -247,8 +191,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "CCTV",
-      "uptime_pct": "84.22",
-      "downtime_count": 2,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 3,
       "health_status_detail": null
     },
@@ -261,8 +205,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server Fire Alarm System",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -275,8 +219,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Fire Alarm System",
-      "uptime_pct": "83.67",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     },
@@ -289,8 +233,8 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Fire Alarm System",
-      "uptime_pct": "83.68",
-      "downtime_count": 1,
+      "uptime_pct": "99.90",
+      "downtime_count": 0,
       "failed_access_count": 1,
       "health_status_detail": null
     }
@@ -486,62 +430,6 @@
       "id": 13
     },
     {
-      "device_id": 4,
-      "status": "Offline",
-      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.60",
-      "timestamp": "2026-08-06T02:15:24.765Z",
-      "id": 12
-    },
-    {
-      "device_id": 3,
-      "status": "Offline",
-      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.30",
-      "timestamp": "2026-08-06T02:15:24.694Z",
-      "id": 11
-    },
-    {
-      "device_id": 2,
-      "status": "Offline",
-      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.20",
-      "timestamp": "2026-08-06T02:15:24.628Z",
-      "id": 10
-    },
-    {
-      "device_id": 1,
-      "status": "Offline",
-      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.10",
-      "timestamp": "2026-08-06T02:15:24.538Z",
-      "id": 9
-    },
-    {
-      "id": 1,
-      "device_id": 1,
-      "status": "Online",
-      "message": "Device connected and responding to heartbeat.",
-      "timestamp": "2026-08-06T02:15:22.495Z"
-    },
-    {
-      "id": 2,
-      "device_id": 2,
-      "status": "Anomaly",
-      "message": "App Session Signed Out: user session terminated unexpectedly.",
-      "timestamp": "2026-08-06T02:15:22.495Z"
-    },
-    {
-      "id": 3,
-      "device_id": 3,
-      "status": "Offline",
-      "message": "Host Unreachable: Connection timeout/Ping failure.",
-      "timestamp": "2026-08-06T02:15:22.495Z"
-    },
-    {
-      "id": 4,
-      "device_id": 4,
-      "status": "Online",
-      "message": "Device connected and responding to heartbeat.",
-      "timestamp": "2026-08-06T02:15:22.495Z"
-    },
-    {
       "id": 5,
       "device_id": 5,
       "status": "Anomaly",
@@ -574,149 +462,296 @@
     {
       "device_id": 1,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 2,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 3,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 0,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 4,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 5,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 6,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 7,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 8,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 18,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 19,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 20,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 21,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 9,
       "date": "2026-08-06",
-      "downtime_seconds": 13630,
+      "downtime_seconds": 13795,
       "incident_count": 2,
-      "uptime_pct": 84.2245
+      "uptime_pct": 84.0336
     },
     {
       "device_id": 10,
       "date": "2026-08-06",
-      "downtime_seconds": 13630,
+      "downtime_seconds": 13795,
       "incident_count": 2,
-      "uptime_pct": 84.2245
+      "uptime_pct": 84.0336
     },
     {
       "device_id": 11,
       "date": "2026-08-06",
-      "downtime_seconds": 13630,
+      "downtime_seconds": 13795,
       "incident_count": 2,
-      "uptime_pct": 84.2245
+      "uptime_pct": 84.0336
     },
     {
       "device_id": 12,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 13,
       "date": "2026-08-06",
-      "downtime_seconds": 13630,
+      "downtime_seconds": 13795,
       "incident_count": 2,
-      "uptime_pct": 84.2245
+      "uptime_pct": 84.0336
     },
     {
       "device_id": 14,
       "date": "2026-08-06",
-      "downtime_seconds": 13630,
+      "downtime_seconds": 13795,
       "incident_count": 2,
-      "uptime_pct": 84.2245
+      "uptime_pct": 84.0336
     },
     {
       "device_id": 15,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 16,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
     },
     {
       "device_id": 17,
       "date": "2026-08-06",
-      "downtime_seconds": 14105,
+      "downtime_seconds": 14270,
       "incident_count": 1,
-      "uptime_pct": 83.6748
+      "uptime_pct": 83.4838
+    },
+    {
+      "device_id": 1,
+      "date": "2026-08-07",
+      "downtime_seconds": 65,
+      "incident_count": 0,
+      "uptime_pct": 99.9248
+    },
+    {
+      "device_id": 2,
+      "date": "2026-08-07",
+      "downtime_seconds": 65,
+      "incident_count": 0,
+      "uptime_pct": 99.9248
+    },
+    {
+      "device_id": 3,
+      "date": "2026-08-07",
+      "downtime_seconds": 65,
+      "incident_count": 0,
+      "uptime_pct": 99.9248
+    },
+    {
+      "device_id": 4,
+      "date": "2026-08-07",
+      "downtime_seconds": 65,
+      "incident_count": 0,
+      "uptime_pct": 99.9248
+    },
+    {
+      "device_id": 5,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 6,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 7,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 8,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 18,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 19,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 20,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 21,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 9,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 10,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 11,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 12,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 13,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 14,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 15,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 16,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 17,
+      "date": "2026-08-07",
+      "downtime_seconds": 90,
+      "incident_count": 0,
+      "uptime_pct": 99.8958
     }
   ],
   "users": [

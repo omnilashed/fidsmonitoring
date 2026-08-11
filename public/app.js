@@ -7,6 +7,7 @@ let currentTab = 'overview'; // 'overview' | 'FIDS' | 'IP PABX' | 'CCTV' | 'Fire
 let ws = null;
 let statusChart = null;
 let isMuted = false;
+let offlineAlarmEnabled = true;
 let perfPollInterval = null; // Server Performance Metrics polling interval
 
 // Equipment type group definitions
@@ -258,13 +259,48 @@ function initWebSocket() {
       logs = data.logs.slice(0, 30);
       if (data.config) {
         document.getElementById('sim-mode-checkbox').checked = data.config.simulationMode;
+        if (data.config.offlineAlarmEnabled !== undefined) {
+          offlineAlarmEnabled = data.config.offlineAlarmEnabled === true || data.config.offlineAlarmEnabled === 'true';
+        }
       }
+      
+      // Update Database Status Pill
+      const dbPill = document.getElementById('db-status-pill');
+      if (dbPill && data.dbStatus) {
+        dbPill.style.display = 'flex';
+        if (data.dbStatus === 'connecting') {
+          dbPill.style.background = 'rgba(245, 158, 11, 0.15)';
+          dbPill.style.color = '#fbbf24';
+          dbPill.style.borderColor = 'rgba(245, 158, 11, 0.25)';
+          dbPill.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Database: Loading Cache';
+        } else if (data.dbStatus === 'connected') {
+          dbPill.style.background = 'rgba(16, 185, 129, 0.15)';
+          dbPill.style.color = '#10b981';
+          dbPill.style.borderColor = 'rgba(16, 185, 129, 0.25)';
+          dbPill.innerHTML = '<i class="fa-solid fa-database"></i> Database: MySQL Connected';
+          // Automatically hide after 5 seconds of success
+          setTimeout(() => {
+            if (dbPill.innerHTML.includes('MySQL Connected')) {
+              dbPill.style.display = 'none';
+            }
+          }, 5000);
+        } else if (data.dbStatus === 'fallback') {
+          dbPill.style.background = 'rgba(56, 189, 248, 0.15)';
+          dbPill.style.color = '#38bdf8';
+          dbPill.style.borderColor = 'rgba(56, 189, 248, 0.25)';
+          dbPill.innerHTML = '<i class="fa-solid fa-file-code"></i> Database: Local JSON DB';
+        }
+      }
+
       renderDashboard();
       if (document.getElementById('admin-modal').classList.contains('active')) {
         renderAdminDevices();
       }
     } else if (data.type === 'CONFIG_UPDATED') {
       document.getElementById('sim-mode-checkbox').checked = data.config.simulationMode;
+      if (data.config.offlineAlarmEnabled !== undefined) {
+        offlineAlarmEnabled = data.config.offlineAlarmEnabled === true || data.config.offlineAlarmEnabled === 'true';
+      }
     } else if (data.type === 'DEVICE_CREATED') {
       devices.push(data.device);
       renderDashboard();
@@ -280,13 +316,17 @@ function initWebSocket() {
         // Trigger alerts on specific status changes
         if (oldDevice.status !== data.device.status) {
           if (data.device.status === 'Offline') {
-            playAlertSound('critical');
-            showToastBanner(data.device, 'critical');
+            if (offlineAlarmEnabled) {
+              playAlertSound('critical');
+              showToastBanner(data.device, 'critical');
+            }
           } else if (data.device.status === 'Anomaly') {
             playAlertSound('warning');
             showToastBanner(data.device, 'warning');
           } else if (data.device.status === 'Online') {
-            playAlertSound('info');
+            if (offlineAlarmEnabled) {
+              playAlertSound('info');
+            }
           }
         }
       } else {
@@ -611,6 +651,9 @@ function renderGrid() {
         typeActionsHtml = `<button class="view-btn" onclick="openDeviceWebView('${device.ip_address}', '${device.name}', '${device.equipment_type}')" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;"><i class="fa-solid fa-eye"></i> View</button>`;
       }
 
+      const latencyVal = device.status !== 'Offline' && device.latency_ms !== null ? `${device.latency_ms} ms` : '-';
+      const latencyColor = device.status === 'Offline' ? 'var(--text-muted)' : (device.latency_ms < 50 ? '#10b981' : (device.latency_ms < 150 ? '#fbbf24' : '#ef4444'));
+
       card.innerHTML = `
       <div class="card-top">
         <div class="device-title">
@@ -623,6 +666,10 @@ function renderGrid() {
         <div class="detail-item">
           <span class="detail-label">Zona / Terminal</span>
           <span class="detail-val">${terminalLabel(device.terminal)}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Latency</span>
+          <span class="detail-val" style="color: ${latencyColor}; font-weight: 700;">${latencyVal}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Location</span>
@@ -856,9 +903,14 @@ function renderTable() {
     const typeInfo = typeIcons[device.equipment_type] || { icon: 'fa-microchip', color: '#94a3b8' };
     const typeBadge = `<span style="font-size:10px; color:${typeInfo.color};"><i class="fa-solid ${typeInfo.icon}"></i> ${device.equipment_type || 'FIDS'}</span>`;
 
+    const latencyVal = device.status !== 'Offline' && device.latency_ms !== null ? `${device.latency_ms} ms` : '-';
+    const latencyColor = device.status === 'Offline' ? 'var(--text-muted)' : (device.latency_ms < 50 ? '#10b981' : (device.latency_ms < 150 ? '#fbbf24' : '#ef4444'));
+    const latencyBadge = `<span style="font-weight:600; color:${latencyColor};">${latencyVal}</span>`;
+
     row.innerHTML = `
       <td>${statusText}</td>
       <td class="table-ip">${device.ip_address}</td>
+      <td>${latencyBadge}</td>
       <td><strong>${device.name}</strong></td>
       <td>${typeBadge}</td>
       <td><span class="table-tag" style="white-space:nowrap;">${terminalLabel(device.terminal)}</span></td>
@@ -2107,6 +2159,7 @@ function fetchSchedulerConfig() {
     document.getElementById('cfg-tg-enabled').checked = data.telegramEnabled;
     document.getElementById('cfg-tg-token').value = data.telegramToken;
     document.getElementById('cfg-tg-chatid').value = data.telegramChatId;
+    document.getElementById('cfg-offline-alarm').checked = data.offlineAlarmEnabled;
   })
   .catch(err => console.error('Failed to load configurations:', err));
 }
@@ -2118,11 +2171,12 @@ function saveSchedulerConfig() {
   const telegramEnabled = document.getElementById('cfg-tg-enabled').checked;
   const telegramToken = document.getElementById('cfg-tg-token').value;
   const telegramChatId = document.getElementById('cfg-tg-chatid').value;
+  const offlineAlarmEnabled = document.getElementById('cfg-offline-alarm').checked;
 
   fetch('/api/config/scheduler', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ batchSize, pingInterval, telegramEnabled, telegramToken, telegramChatId })
+    body: JSON.stringify({ batchSize, pingInterval, telegramEnabled, telegramToken, telegramChatId, offlineAlarmEnabled })
   })
   .then(res => res.json())
   .then(data => {
@@ -2278,18 +2332,34 @@ async function initializeAnalyticsTab() {
     const res = await fetch('/api/devices');
     const devices = await res.json();
     
-    selectEl.innerHTML = '';
+    selectEl.innerHTML = `
+      <optgroup label="System-wide Analysis">
+        <option value="overall" selected>🌐 All Systems Overall</option>
+      </optgroup>
+      <optgroup label="Equipment Category Analysis">
+        <option value="category:FIDS">📺 FIDS Monitors</option>
+        <option value="category:Server FIDS">🖥️ FIDS Servers</option>
+        <option value="category:CCTV">📹 CCTV Cameras</option>
+        <option value="category:Server CCTV">🖥️ CCTV Servers</option>
+        <option value="category:IP PABX">📞 IP PABX System</option>
+        <option value="category:Fire Alarm System">🚨 Fire Alarm System</option>
+        <option value="category:Server Fire Alarm System">🖥️ Fire Alarm Servers</option>
+      </optgroup>
+      <optgroup label="Individual Device Analysis" id="analytics-individual-devices">
+      </optgroup>
+    `;
+
+    const individualGroup = document.getElementById('analytics-individual-devices');
     devices.forEach(d => {
       const opt = document.createElement('option');
-      opt.value = d.id;
-      opt.textContent = `${d.name} (${d.ip_address}) - [${d.equipment_type || 'FIDS'}]`;
-      selectEl.appendChild(opt);
+      opt.value = `device:${d.id}`;
+      opt.textContent = `${d.name} (${d.ip_address})`;
+      individualGroup.appendChild(opt);
     });
 
-    if (devices.length > 0) {
-      selectEl.value = devices[0].id;
-      loadDeviceAnalytics();
-    }
+    // Default to overall system analytics
+    selectEl.value = 'overall';
+    loadDeviceAnalytics();
   } catch (err) {
     console.error('Failed to populate analytics devices:', err);
   }
@@ -2299,10 +2369,25 @@ async function loadDeviceAnalytics() {
   const selectEl = document.getElementById('analytics-device-select');
   if (!selectEl || !selectEl.value) return;
 
-  const deviceId = selectEl.value;
+  const selectVal = selectEl.value;
+  let metricsUrl = '';
+  let historyUrl = '';
+
+  if (selectVal === 'overall') {
+    metricsUrl = '/api/analytics/overall';
+    historyUrl = '/api/analytics/overall/history';
+  } else if (selectVal.startsWith('category:')) {
+    const cat = selectVal.split(':')[1];
+    metricsUrl = `/api/analytics/category/${encodeURIComponent(cat)}`;
+    historyUrl = `/api/analytics/category/${encodeURIComponent(cat)}/history`;
+  } else {
+    const deviceId = selectVal.startsWith('device:') ? selectVal.split(':')[1] : selectVal;
+    metricsUrl = `/api/devices/${deviceId}/analytics`;
+    historyUrl = `/api/devices/${deviceId}/uptime-history`;
+  }
 
   try {
-    const analyticRes = await fetch(`/api/devices/${deviceId}/analytics`);
+    const analyticRes = await fetch(metricsUrl);
     const metrics = await analyticRes.json();
 
     const availVal = document.getElementById('analytics-avail-val');
@@ -2353,7 +2438,7 @@ async function loadDeviceAnalytics() {
       badgeEl.style.borderColor = 'rgba(239, 68, 68, 0.25)';
     }
 
-    const historyRes = await fetch(`/api/devices/${deviceId}/uptime-history`);
+    const historyRes = await fetch(historyUrl);
     const history = await historyRes.json();
 
     const historyList = document.getElementById('analytics-history-list');

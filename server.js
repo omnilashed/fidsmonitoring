@@ -19,6 +19,7 @@ const JSON_DB_FILE = path.join(__dirname, 'database.json');
 let TELEGRAM_ENABLED = false;
 let TELEGRAM_TOKEN = '';
 let TELEGRAM_CHAT_ID = '';
+let OFFLINE_ALARM_ENABLED = true;
 
 // ─── Multi-Interface IP Binding ─────────────────────────────────────────────
 // Returns all active IPv4 addresses on this machine (excluding loopback/APIPA)
@@ -91,16 +92,11 @@ let useJsonFallback = false;
 let simulationMode = false; // Default to false for real FIDS network monitoring
 
 
-// Mock database in-memory state for fallback
-let jsonDbState = {
-  devices: [],
-  logs: []
-};
-
 // Initial list of devices in the requested subnets
 const initialDevices = [
   // FIDS monitors (172.23.1.1-254)
   { id: 1, ip_address: '172.23.1.10', name: 'FIDS-T1-Checkin-01', location: 'Check-in Desk Row A', terminal: 'T1', status: 'Online', anomaly_type: null, equipment_type: 'FIDS', uptime_pct: 100.00, downtime_count: 0, failed_access_count: 0 },
+
   { id: 2, ip_address: '172.23.1.20', name: 'FIDS-T1-Gate-01A', location: 'Gate 1A Departure', terminal: 'T1', status: 'Online', anomaly_type: null, equipment_type: 'FIDS', uptime_pct: 99.80, downtime_count: 0, failed_access_count: 0 },
   { id: 3, ip_address: '172.23.1.30', name: 'FIDS-T2-Checkin-05', location: 'Check-in Desk 5', terminal: 'T2', status: 'Offline', anomaly_type: null, equipment_type: 'FIDS', uptime_pct: 94.20, downtime_count: 3, failed_access_count: 12 },
   { id: 4, ip_address: '172.23.1.60', name: 'FIDS-T2-Gate-02', location: 'Gate 2 Boarding Lounge', terminal: 'T2', status: 'Online', anomaly_type: null, equipment_type: 'FIDS', uptime_pct: 100.00, downtime_count: 0, failed_access_count: 0 },
@@ -147,10 +143,26 @@ const initialLogs = [
   { id: 8, device_id: 8, status: 'Online', message: 'Device connected and responding to heartbeat.', timestamp: new Date() }
 ];
 
+// Mock database in-memory state for fallback
+let jsonDbState = {
+  devices: initialDevices,
+  logs: initialLogs
+};
+
+// Try loading database.json immediately so we have a cache on startup
+if (fs.existsSync(JSON_DB_FILE)) {
+  try {
+    jsonDbState = JSON.parse(fs.readFileSync(JSON_DB_FILE, 'utf8'));
+  } catch (err) {
+    console.error('Failed to parse database.json on early startup:', err.message);
+  }
+}
+
 // Helper to save JSON DB
 function saveJsonDb() {
   fs.writeFileSync(JSON_DB_FILE, JSON.stringify(jsonDbState, null, 2));
 }
+
 
 // Database Connection & Initialization Helper
 async function initializeDatabase() {
@@ -158,7 +170,8 @@ async function initializeDatabase() {
     host: 'localhost',
     user: 'root',
     password: '',
-    port: 3306
+    port: 3306,
+    connectTimeout: 5000   // 5 second timeout — prevents hanging if MySQL is slow to start
   };
 
   try {
@@ -173,7 +186,8 @@ async function initializeDatabase() {
       database: 'fids_monitoring',
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      acquireTimeout: 5000   // 5 second max wait for a connection from the pool (valid for pools only)
     });
 
     // 3. Create tables if they do not exist
@@ -191,6 +205,7 @@ async function initializeDatabase() {
         uptime_pct DECIMAL(5,2) DEFAULT 100.00,
         downtime_count INT DEFAULT 0,
         failed_access_count INT DEFAULT 0,
+        latency_ms INT DEFAULT NULL,
         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
@@ -207,6 +222,13 @@ async function initializeDatabase() {
     } catch (err) {
       // Column already exists, ignore
     }
+
+    try {
+      await pool.query(`ALTER TABLE devices ADD COLUMN latency_ms INT DEFAULT NULL`);
+    } catch (err) {
+      // Column already exists, ignore
+    }
+
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS logs (
@@ -281,8 +303,14 @@ async function initializeDatabase() {
         ('telegram_token', ''),
         ('telegram_chat_id', ''),
         ('scheduler_batch_size', '30'),
-        ('scheduler_ping_interval', '10000')
+        ('scheduler_ping_interval', '10000'),
+        ('offline_alarm_enabled', 'true')
       `);
+    } else {
+      // In case table is already seeded but missing this specific configuration
+      try {
+        await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('offline_alarm_enabled', 'true')");
+      } catch (_) {}
     }
 
     // Load active settings from database
@@ -293,8 +321,9 @@ async function initializeDatabase() {
       if (row.key === 'telegram_chat_id') TELEGRAM_CHAT_ID = row.value;
       if (row.key === 'scheduler_batch_size') BATCH_SIZE = parseInt(row.value) || 30;
       if (row.key === 'scheduler_ping_interval') PING_INTERVAL = parseInt(row.value) || 10000;
+      if (row.key === 'offline_alarm_enabled') OFFLINE_ALARM_ENABLED = row.value === 'true';
     });
-    console.log(`Loaded MySQL configurations: Telegram=${TELEGRAM_ENABLED}, BatchSize=${BATCH_SIZE}, Interval=${PING_INTERVAL}ms`);
+    console.log(`Loaded MySQL configurations: Telegram=${TELEGRAM_ENABLED}, BatchSize=${BATCH_SIZE}, Interval=${PING_INTERVAL}ms, OfflineAlarm=${OFFLINE_ALARM_ENABLED}`);
 
     // 4. Seed default data if empty
     const [rows] = await pool.query('SELECT COUNT(*) as count FROM devices');
@@ -360,8 +389,14 @@ async function initializeDatabase() {
             telegram_token: '',
             telegram_chat_id: '',
             scheduler_batch_size: '30',
-            scheduler_ping_interval: '10000'
+            scheduler_ping_interval: '10000',
+            offline_alarm_enabled: 'true'
           };
+          changed = true;
+        }
+
+        if (!jsonDbState.settings.offline_alarm_enabled) {
+          jsonDbState.settings.offline_alarm_enabled = 'true';
           changed = true;
         }
 
@@ -372,7 +407,8 @@ async function initializeDatabase() {
         TELEGRAM_CHAT_ID = settings.telegram_chat_id || '';
         BATCH_SIZE = parseInt(settings.scheduler_batch_size) || 30;
         PING_INTERVAL = parseInt(settings.scheduler_ping_interval) || 10000;
-        console.log(`Loaded JSON configurations: Telegram=${TELEGRAM_ENABLED}, BatchSize=${BATCH_SIZE}, Interval=${PING_INTERVAL}ms`);
+        OFFLINE_ALARM_ENABLED = settings.offline_alarm_enabled === 'true';
+        console.log(`Loaded JSON configurations: Telegram=${TELEGRAM_ENABLED}, BatchSize=${BATCH_SIZE}, Interval=${PING_INTERVAL}ms, OfflineAlarm=${OFFLINE_ALARM_ENABLED}`);
 
         // Log Retention: filter out fallback logs older than 30 days
         if (jsonDbState.logs) {
@@ -409,7 +445,8 @@ async function initializeDatabase() {
             telegram_token: '',
             telegram_chat_id: '',
             scheduler_batch_size: '30',
-            scheduler_ping_interval: '10000'
+            scheduler_ping_interval: '10000',
+            offline_alarm_enabled: 'true'
           }
         };
       }
@@ -429,7 +466,8 @@ async function initializeDatabase() {
           telegram_token: '',
           telegram_chat_id: '',
           scheduler_batch_size: '30',
-          scheduler_ping_interval: '10000'
+          scheduler_ping_interval: '10000',
+          offline_alarm_enabled: 'true'
         }
       };
       saveJsonDb();
@@ -832,6 +870,60 @@ function checkVncPort(ip, timeout = 2000, localAddress = null) {
   });
 }
 
+// Performs a single ping check and returns the latency in milliseconds if successful
+function pingDeviceSingle(ip, timeoutMs = 1000) {
+  return new Promise((resolve) => {
+    const [cmd, ...args] = process.platform === 'win32'
+      ? ['ping', '-n', '1', '-w', timeoutMs.toString(), ip]
+      : ['ping', '-c', '1', '-W', Math.ceil(timeoutMs / 1000).toString(), ip];
+    
+    try {
+      const child = spawn(cmd, args);
+      let stdoutData = '';
+      if (child.stdout) {
+        child.stdout.on('data', (data) => { stdoutData += data.toString(); });
+      }
+      
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) {
+          done = true;
+          try { child.kill('SIGKILL'); } catch (_) {}
+          resolve({ success: false, latency: null });
+        }
+      }, timeoutMs + 300);
+
+      child.on('close', (code) => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          let latency = null;
+          if (code === 0) {
+            // Match latency time from ping output (e.g. time=12ms or time<1ms)
+            const match = stdoutData.match(/time[=<]([0-9.]+)/i);
+            if (match) {
+              latency = Math.round(parseFloat(match[1]));
+            } else {
+              latency = 1; // Default minimum if time is less than 1ms or not parsed
+            }
+          }
+          resolve({ success: code === 0, latency });
+        }
+      });
+
+      child.on('error', () => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve({ success: false, latency: null });
+        }
+      });
+    } catch (_) {
+      resolve({ success: false, latency: null });
+    }
+  });
+}
+
 // Executes concurrent ping and TCP VNC port checks, updating database states
 async function pingDevice(device) {
   const isLocalhost = device.ip_address === '127.0.0.1' || device.ip_address === 'localhost';
@@ -839,15 +931,9 @@ async function pingDevice(device) {
   // Resolve the best local source IP for this device's subnet (IP Binding)
   const sourceIp = isLocalhost ? null : resolveSourceIP(device.ip_address);
 
-  // Build ping command WITHOUT source interface binding to avoid Windows hang
-  // Windows ping -S can hang indefinitely when the route is invalid, ignoring -w timeout
-  // VNC check (checkVncPort) handles source IP binding via TCP socket instead
-  const pingCmd = process.platform === 'win32'
-    ? `ping -n 1 -w 1000 ${device.ip_address}`
-    : `ping -c 1 -W 1 ${device.ip_address}`;
-
   let isPingSuccess = false;
   let isVncSuccess = false;
+  let finalLatency = null;
 
   if (simulationMode) {
     if (!isLocalhost) {
@@ -855,62 +941,57 @@ async function pingDevice(device) {
       if (roll < 0.7) {
         isPingSuccess = true;
         isVncSuccess = true;
+        finalLatency = Math.floor(Math.random() * 30) + 5; // 5-35 ms
       } else if (roll < 0.8) {
         isPingSuccess = false;
         isVncSuccess = true; // VNC Online only, Ping RTO case
+        finalLatency = Math.floor(Math.random() * 100) + 50; // 50-150 ms
       } else if (roll < 0.9) {
         isPingSuccess = true;
         isVncSuccess = false;
+        finalLatency = Math.floor(Math.random() * 50) + 10;
       } else {
         isPingSuccess = false;
         isVncSuccess = false;
+        finalLatency = null;
       }
     } else {
       isPingSuccess = true;
       isVncSuccess = true;
+      finalLatency = 1;
     }
   } else {
-    // Real-world checks: execute ping and VNC checks concurrently
-    const pingPromise = new Promise((resolve) => {
-      const [cmd, ...args] = process.platform === 'win32'
-        ? ['ping', '-n', '1', '-w', '1000', device.ip_address]
-        : ['ping', '-c', '1', '-W', '1', device.ip_address];
-      const child = spawn(cmd, args, { stdio: 'ignore' });
-      let done = false;
-      const timer = setTimeout(() => {
-        if (!done) {
-          done = true;
-          try { child.kill('SIGKILL'); } catch (_) {}
-          resolve(false);
-        }
-      }, 2500);
-      child.on('close', (code) => {
-        if (!done) {
-          done = true;
-          clearTimeout(timer);
-          resolve(code === 0);
-        }
-      });
-      child.on('error', () => {
-        if (!done) {
-          done = true;
-          clearTimeout(timer);
-          resolve(false);
-        }
-      });
-    });
-    const vncPromise = checkVncPort(device.ip_address, 2000, sourceIp);
-    
-    // Outer 5-second guard
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('TIMEOUT'), 5000));
-    const raceResult = await Promise.race([Promise.all([pingPromise, vncPromise]), timeoutPromise]);
-    
-    if (raceResult === 'TIMEOUT') {
-      isPingSuccess = false;
-      isVncSuccess = false;
-      console.warn(`[TIMEOUT WARNING] Heartbeat check for ${device.ip_address} exceeded 5000ms limit.`);
+    // Real-world checks: Escalation Ping + VNC TCP check
+    // 1st Ping attempt: 1000ms timeout
+    let pingRes = await pingDeviceSingle(device.ip_address, 1000);
+    if (pingRes.success) {
+      isPingSuccess = true;
+      finalLatency = pingRes.latency;
     } else {
-      [isPingSuccess, isVncSuccess] = raceResult;
+      // 2nd Ping attempt: 1500ms timeout with 100ms stagger wait
+      await new Promise(r => setTimeout(r, 100));
+      pingRes = await pingDeviceSingle(device.ip_address, 1500);
+      if (pingRes.success) {
+        isPingSuccess = true;
+        finalLatency = pingRes.latency;
+      } else {
+        // 3rd Ping attempt: 1500ms timeout with 100ms stagger wait
+        await new Promise(r => setTimeout(r, 100));
+        pingRes = await pingDeviceSingle(device.ip_address, 1500);
+        if (pingRes.success) {
+          isPingSuccess = true;
+          finalLatency = pingRes.latency;
+        }
+      }
+    }
+
+    // Connect to VNC Port (5900)
+    const startVncTime = Date.now();
+    isVncSuccess = await checkVncPort(device.ip_address, 2000, sourceIp);
+
+    // Fallback: If VNC succeeds but ping fails, use VNC connection time as latency
+    if (isVncSuccess && !isPingSuccess) {
+      finalLatency = Date.now() - startVncTime;
     }
 
     // Log which interface is being used (helpful for debugging)
@@ -918,6 +999,7 @@ async function pingDevice(device) {
       console.log(`[BIND] ${device.ip_address} → source: ${sourceIp} (${device.equipment_type || 'device'})`);
     }
   }
+
 
   const isOnline = isPingSuccess || isVncSuccess;
   let healthStatusDetail = null;
@@ -964,11 +1046,19 @@ async function pingDevice(device) {
   }
 
   try {
-    // Check if status or source changed
-    if (device.status !== newStatus || device.anomaly_type !== anomalyType || device.health_status_detail !== healthStatusDetail) {
-      let updatedDevice = { ...device, status: newStatus, anomaly_type: anomalyType, health_status_detail: healthStatusDetail };
+    const isStatusChanged = device.status !== newStatus || device.anomaly_type !== anomalyType || device.health_status_detail !== healthStatusDetail;
+    const isLatencyChanged = device.latency_ms !== finalLatency;
+
+    if (isStatusChanged || isLatencyChanged) {
+      let updatedDevice = { 
+        ...device, 
+        status: newStatus, 
+        anomaly_type: anomalyType, 
+        health_status_detail: healthStatusDetail,
+        latency_ms: finalLatency
+      };
       
-      if (newStatus === 'Offline') {
+      if (isStatusChanged && newStatus === 'Offline') {
         updatedDevice.failed_access_count = device.failed_access_count + 1;
         updatedDevice.downtime_count = device.downtime_count + 1;
         updatedDevice.uptime_pct = Math.max(50.0, parseFloat(device.uptime_pct) - 1.5).toFixed(2);
@@ -983,13 +1073,13 @@ async function pingDevice(device) {
       } else {
         if (newStatus === 'Offline') {
           await pool.query(
-            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, failed_access_count = ?, downtime_count = ?, uptime_pct = ? WHERE id = ?`,
-            [newStatus, anomalyType, healthStatusDetail, updatedDevice.failed_access_count, updatedDevice.downtime_count, updatedDevice.uptime_pct, device.id]
+            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, failed_access_count = ?, downtime_count = ?, uptime_pct = ?, latency_ms = ? WHERE id = ?`,
+            [newStatus, anomalyType, healthStatusDetail, updatedDevice.failed_access_count, updatedDevice.downtime_count, updatedDevice.uptime_pct, finalLatency, device.id]
           );
         } else {
           await pool.query(
-            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ? WHERE id = ?`,
-            [newStatus, anomalyType, healthStatusDetail, device.id]
+            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, latency_ms = ? WHERE id = ?`,
+            [newStatus, anomalyType, healthStatusDetail, finalLatency, device.id]
           );
         }
       }
@@ -997,20 +1087,25 @@ async function pingDevice(device) {
       if (device.status !== newStatus) {
         let telegramMsg = '';
         if (newStatus === 'Online') {
-          telegramMsg = `🟢 *[RECOVERY]* Device *${device.name.replace(/_/g, '\\_')}* (${device.ip_address}) - [${device.equipment_type || 'FIDS'}] is back *ONLINE* (${healthStatusDetail})`;
+          if (OFFLINE_ALARM_ENABLED || device.status !== 'Offline') {
+            telegramMsg = `🟢 *[RECOVERY]* Device *${device.name.replace(/_/g, '\\_')}* (${device.ip_address}) - [${device.equipment_type || 'FIDS'}] is back *ONLINE* (${healthStatusDetail})`;
+          }
         } else if (newStatus === 'Offline') {
-          telegramMsg = `🔴 *[ALERT]* Device *${device.name.replace(/_/g, '\\_')}* (${device.ip_address}) - [${device.equipment_type || 'FIDS'}] is *OFFLINE*`;
+          if (OFFLINE_ALARM_ENABLED) {
+            telegramMsg = `🔴 *[ALERT]* Device *${device.name.replace(/_/g, '\\_')}* (${device.ip_address}) - [${device.equipment_type || 'FIDS'}] is *OFFLINE*`;
+          }
         } else if (newStatus === 'Anomaly') {
           telegramMsg = `⚠️ *[ANOMALY]* Device *${device.name.replace(/_/g, '\\_')}* (${device.ip_address}) - [${device.equipment_type || 'FIDS'}] is reporting *ANOMALY* (${anomalyType ? anomalyType.replace(/_/g, '\\_') : ''})`;
         }
         if (telegramMsg) {
           sendTelegramAlert(telegramMsg);
         }
+        await logStatusChange(device.id, newStatus, logMsg);
       }
 
-      await logStatusChange(device.id, newStatus, logMsg);
       broadcast({ type: 'DEVICE_UPDATED', device: updatedDevice });
     }
+
 
     // Accumulate daily uptime analytics
     const isCurrentlyOffline = newStatus === 'Offline';
@@ -1129,11 +1224,32 @@ async function runHeartbeatIteration() {
       devicesList = rows;
     }
     
-    // Run ping checks in safe batches to protect system resources (CPU/Database pool)
-    for (let i = 0; i < devicesList.length; i += BATCH_SIZE) {
-      const batch = devicesList.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(device => pingDevice(device)));
+    // Run ping checks using a Concurrency-Controlled Worker Pool (max 15 active workers)
+    // This prevents spawning too many child processes simultaneously on low-spec CPUs (like i5 950)
+    const CONCURRENCY_LIMIT = 15;
+    const queue = [...devicesList];
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const device = queue.shift();
+        if (device) {
+          try {
+            await pingDevice(device);
+          } catch (pingErr) {
+            console.error(`Error checking device ${device.ip_address}:`, pingErr);
+          }
+        }
+      }
+    };
+
+    const workers = [];
+    const numWorkers = Math.min(CONCURRENCY_LIMIT, queue.length);
+    for (let w = 0; w < numWorkers; w++) {
+      workers.push(worker());
     }
+
+    await Promise.all(workers);
+
   } catch (err) {
     console.error('Heartbeat monitor iteration error:', err);
   }
@@ -1218,12 +1334,19 @@ wss.on('connection', async (ws, req) => {
   try {
     let devicesList = [];
     let logsList = [];
+    let dbStatus = 'connecting';
 
     if (useJsonFallback) {
-      devicesList = jsonDbState.devices;
-      // map logs to include device names
-      logsList = jsonDbState.logs.map(l => {
-        const d = jsonDbState.devices.find(dev => dev.id === l.device_id);
+      dbStatus = 'fallback';
+    } else if (pool !== null) {
+      dbStatus = 'connected';
+    }
+
+    if (useJsonFallback || pool === null) {
+      // Use JSON fallback immediately — DB may still be initializing
+      devicesList = jsonDbState.devices || [];
+      logsList = (jsonDbState.logs || []).map(l => {
+        const d = (jsonDbState.devices || []).find(dev => dev.id === l.device_id);
         return { ...l, name: d ? d.name : 'Device' };
       }).slice(0, 30);
     } else {
@@ -1233,11 +1356,15 @@ wss.on('connection', async (ws, req) => {
       logsList = logsRows;
     }
 
-    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: devicesList, logs: logsList, config: { simulationMode } }));
+    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
   } catch (err) {
     console.error('Error fetching init data for WS client:', err);
+    // Send empty init so the client at least connects
+    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: [], logs: [], dbStatus: 'fallback', config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
   }
 });
+
+
 
 // Middleware to verify if the user has admin role
 function verifyAdmin(req, res, next) {
@@ -1659,13 +1786,14 @@ app.get('/api/config/scheduler', async (req, res) => {
     pingInterval: PING_INTERVAL,
     telegramEnabled: TELEGRAM_ENABLED,
     telegramToken: TELEGRAM_TOKEN,
-    telegramChatId: TELEGRAM_CHAT_ID
+    telegramChatId: TELEGRAM_CHAT_ID,
+    offlineAlarmEnabled: OFFLINE_ALARM_ENABLED
   });
 });
 
 // Update active scheduler & Telegram configs
 app.post('/api/config/scheduler', async (req, res) => {
-  const { batchSize, pingInterval, telegramEnabled, telegramToken, telegramChatId } = req.body;
+  const { batchSize, pingInterval, telegramEnabled, telegramToken, telegramChatId, offlineAlarmEnabled } = req.body;
 
   try {
     if (batchSize !== undefined) BATCH_SIZE = parseInt(batchSize) || 30;
@@ -1679,6 +1807,7 @@ app.post('/api/config/scheduler', async (req, res) => {
     if (telegramEnabled !== undefined) TELEGRAM_ENABLED = telegramEnabled === true || telegramEnabled === 'true';
     if (telegramToken !== undefined) TELEGRAM_TOKEN = telegramToken;
     if (telegramChatId !== undefined) TELEGRAM_CHAT_ID = telegramChatId;
+    if (offlineAlarmEnabled !== undefined) OFFLINE_ALARM_ENABLED = offlineAlarmEnabled === true || offlineAlarmEnabled === 'true';
 
     if (useJsonFallback) {
       jsonDbState.settings = {
@@ -1686,7 +1815,8 @@ app.post('/api/config/scheduler', async (req, res) => {
         telegram_token: TELEGRAM_TOKEN,
         telegram_chat_id: TELEGRAM_CHAT_ID,
         scheduler_batch_size: BATCH_SIZE.toString(),
-        scheduler_ping_interval: PING_INTERVAL.toString()
+        scheduler_ping_interval: PING_INTERVAL.toString(),
+        offline_alarm_enabled: OFFLINE_ALARM_ENABLED.toString()
       };
       saveJsonDb();
     } else {
@@ -1695,11 +1825,22 @@ app.post('/api/config/scheduler', async (req, res) => {
       await pool.query('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?', ['telegram_chat_id', TELEGRAM_CHAT_ID, TELEGRAM_CHAT_ID]);
       await pool.query('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?', ['scheduler_batch_size', BATCH_SIZE.toString(), BATCH_SIZE.toString()]);
       await pool.query('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?', ['scheduler_ping_interval', PING_INTERVAL.toString(), PING_INTERVAL.toString()]);
+      await pool.query('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?', ['offline_alarm_enabled', OFFLINE_ALARM_ENABLED.toString(), OFFLINE_ALARM_ENABLED.toString()]);
     }
 
-    console.log(`Updated configurations: Telegram=${TELEGRAM_ENABLED}, BatchSize=${BATCH_SIZE}, Interval=${PING_INTERVAL}ms`);
+    console.log(`Updated configurations: Telegram=${TELEGRAM_ENABLED}, BatchSize=${BATCH_SIZE}, Interval=${PING_INTERVAL}ms, OfflineAlarm=${OFFLINE_ALARM_ENABLED}`);
     startTelegramBotPolling();
-    res.json({ success: true, batchSize: BATCH_SIZE, pingInterval: PING_INTERVAL, telegramEnabled: TELEGRAM_ENABLED });
+    
+    // Broadcast updated config to all WebSocket clients
+    broadcast({
+      type: 'CONFIG_UPDATED',
+      config: {
+        simulationMode,
+        offlineAlarmEnabled: OFFLINE_ALARM_ENABLED
+      }
+    });
+
+    res.json({ success: true, batchSize: BATCH_SIZE, pingInterval: PING_INTERVAL, telegramEnabled: TELEGRAM_ENABLED, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED });
   } catch (err) {
     console.error('Failed to save scheduler config:', err);
     res.status(500).json({ error: err.message });
@@ -1908,6 +2049,236 @@ app.get('/api/devices/:id/analytics', async (req, res) => {
   }
 });
 
+// GET /api/analytics/overall: Calculates aggregated operational availability, MTBF, and MTTR for all systems
+app.get('/api/analytics/overall', async (req, res) => {
+  try {
+    let history = [];
+    if (useJsonFallback) {
+      if (!jsonDbState.daily_uptime) jsonDbState.daily_uptime = [];
+      history = jsonDbState.daily_uptime;
+    } else {
+      [history] = await pool.query('SELECT * FROM daily_uptime');
+    }
+
+    let totalDowntime = 0;
+    let totalIncidents = 0;
+    let totalSeconds = history.length * 86400;
+
+    history.forEach(r => {
+      totalDowntime += r.downtime_seconds || 0;
+      totalIncidents += r.incident_count || 0;
+    });
+
+    const totalUptimeSeconds = Math.max(0, totalSeconds - totalDowntime);
+    const availability = totalSeconds > 0 ? parseFloat(((totalUptimeSeconds / totalSeconds) * 100).toFixed(4)) : 100.0000;
+
+    const mttr = totalIncidents > 0 ? parseFloat((totalDowntime / totalIncidents).toFixed(1)) : 0;
+    const mtbf = totalIncidents > 0 ? parseFloat((totalUptimeSeconds / totalIncidents).toFixed(1)) : totalUptimeSeconds;
+
+    let category = 'Excellent';
+    if (availability >= 99.9) category = 'Excellent';
+    else if (availability >= 99.0) category = 'Good';
+    else if (availability >= 95.0) category = 'Fair';
+    else category = 'Poor';
+
+    res.json({
+      availability,
+      mttr,
+      mtbf,
+      totalIncidents,
+      totalDowntime,
+      daysCount: history.length,
+      category
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/analytics/overall/history: Returns past 7 days aggregated uptime history for all systems
+app.get('/api/analytics/overall/history', async (req, res) => {
+  try {
+    let rawHistory = [];
+    if (useJsonFallback) {
+      if (!jsonDbState.daily_uptime) jsonDbState.daily_uptime = [];
+      rawHistory = jsonDbState.daily_uptime;
+    } else {
+      [rawHistory] = await pool.query('SELECT * FROM daily_uptime');
+    }
+
+    const grouped = {};
+    rawHistory.forEach(r => {
+      let dateStr = r.date;
+      if (dateStr instanceof Date || (typeof dateStr === 'string' && dateStr.includes('T'))) {
+        const d = new Date(dateStr);
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 420);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        dateStr = `${yyyy}-${mm}-${dd}`;
+      }
+      
+      if (!grouped[dateStr]) {
+        grouped[dateStr] = { downtime_seconds: 0, incident_count: 0, device_ids: new Set() };
+      }
+      grouped[dateStr].downtime_seconds += r.downtime_seconds || 0;
+      grouped[dateStr].incident_count += r.incident_count || 0;
+      grouped[dateStr].device_ids.add(r.device_id);
+    });
+
+    const dates = Object.keys(grouped).sort().slice(-7);
+    const result = dates.map(dStr => {
+      const g = grouped[dStr];
+      const deviceCount = g.device_ids.size || 1;
+      const totalSecs = deviceCount * 86400;
+      const uptimePct = parseFloat((((totalSecs - g.downtime_seconds) / totalSecs) * 100).toFixed(4));
+      return {
+        date: dStr,
+        uptime_pct: Math.max(0, uptimePct),
+        downtime_seconds: g.downtime_seconds,
+        incident_count: g.incident_count
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/analytics/category/:category: Calculates aggregated metrics for a specific equipment type
+app.get('/api/analytics/category/:category', async (req, res) => {
+  const category = req.params.category;
+  try {
+    let devices = [];
+    if (useJsonFallback) {
+      devices = jsonDbState.devices || [];
+    } else {
+      [devices] = await pool.query('SELECT * FROM devices');
+    }
+    const catDevices = devices.filter(d => d.equipment_type === category);
+    const catDeviceIds = catDevices.map(d => d.id);
+
+    if (catDeviceIds.length === 0) {
+      return res.json({
+        availability: 100.00,
+        mttr: 0,
+        mtbf: 86400,
+        totalIncidents: 0,
+        totalDowntime: 0,
+        daysCount: 0,
+        category: 'Excellent'
+      });
+    }
+
+    let rawHistory = [];
+    if (useJsonFallback) {
+      if (!jsonDbState.daily_uptime) jsonDbState.daily_uptime = [];
+      rawHistory = jsonDbState.daily_uptime.filter(r => catDeviceIds.includes(r.device_id));
+    } else {
+      [rawHistory] = await pool.query('SELECT * FROM daily_uptime WHERE device_id IN (?)', [catDeviceIds]);
+    }
+
+    let totalDowntime = 0;
+    let totalIncidents = 0;
+    let totalSeconds = rawHistory.length * 86400;
+
+    rawHistory.forEach(r => {
+      totalDowntime += r.downtime_seconds || 0;
+      totalIncidents += r.incident_count || 0;
+    });
+
+    const totalUptimeSeconds = Math.max(0, totalSeconds - totalDowntime);
+    const availability = totalSeconds > 0 ? parseFloat(((totalUptimeSeconds / totalSeconds) * 100).toFixed(4)) : 100.0000;
+
+    const mttr = totalIncidents > 0 ? parseFloat((totalDowntime / totalIncidents).toFixed(1)) : 0;
+    const mtbf = totalIncidents > 0 ? parseFloat((totalUptimeSeconds / totalIncidents).toFixed(1)) : totalUptimeSeconds;
+
+    let grade = 'Excellent';
+    if (availability >= 99.9) grade = 'Excellent';
+    else if (availability >= 99.0) grade = 'Good';
+    else if (availability >= 95.0) grade = 'Fair';
+    else grade = 'Poor';
+
+    res.json({
+      availability,
+      mttr,
+      mtbf,
+      totalIncidents,
+      totalDowntime,
+      daysCount: rawHistory.length,
+      category: grade
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/analytics/category/:category/history: Returns past 7 days aggregated history for a specific equipment type
+app.get('/api/analytics/category/:category/history', async (req, res) => {
+  const category = req.params.category;
+  try {
+    let devices = [];
+    if (useJsonFallback) {
+      devices = jsonDbState.devices || [];
+    } else {
+      [devices] = await pool.query('SELECT * FROM devices');
+    }
+    const catDevices = devices.filter(d => d.equipment_type === category);
+    const catDeviceIds = catDevices.map(d => d.id);
+
+    if (catDeviceIds.length === 0) {
+      return res.json([]);
+    }
+
+    let rawHistory = [];
+    if (useJsonFallback) {
+      if (!jsonDbState.daily_uptime) jsonDbState.daily_uptime = [];
+      rawHistory = jsonDbState.daily_uptime.filter(r => catDeviceIds.includes(r.device_id));
+    } else {
+      [rawHistory] = await pool.query('SELECT * FROM daily_uptime WHERE device_id IN (?)', [catDeviceIds]);
+    }
+
+    const grouped = {};
+    rawHistory.forEach(r => {
+      let dateStr = r.date;
+      if (dateStr instanceof Date || (typeof dateStr === 'string' && dateStr.includes('T'))) {
+        const d = new Date(dateStr);
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 420);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        dateStr = `${yyyy}-${mm}-${dd}`;
+      }
+      
+      if (!grouped[dateStr]) {
+        grouped[dateStr] = { downtime_seconds: 0, incident_count: 0, device_ids: new Set() };
+      }
+      grouped[dateStr].downtime_seconds += r.downtime_seconds || 0;
+      grouped[dateStr].incident_count += r.incident_count || 0;
+      grouped[dateStr].device_ids.add(r.device_id);
+    });
+
+    const dates = Object.keys(grouped).sort().slice(-7);
+    const result = dates.map(dStr => {
+      const g = grouped[dStr];
+      const deviceCount = g.device_ids.size || 1;
+      const totalSecs = deviceCount * 86400;
+      const uptimePct = parseFloat((((totalSecs - g.downtime_seconds) / totalSecs) * 100).toFixed(4));
+      return {
+        date: dStr,
+        uptime_pct: Math.max(0, uptimePct),
+        downtime_seconds: g.downtime_seconds,
+        incident_count: g.incident_count
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Manual trigger for daily midnight reset (for testing / admin use)
 app.post('/api/admin/reset-daily-uptime', async (req, res) => {
   try {
@@ -1950,7 +2321,7 @@ app.post('/api/config', (req, res) => {
   const mode = req.body.simulationMode;
   if (typeof mode === 'boolean') {
     simulationMode = mode;
-    broadcast({ type: 'CONFIG_UPDATED', config: { simulationMode } });
+    broadcast({ type: 'CONFIG_UPDATED', config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } });
     console.log(`[CONFIG] Simulation Mode toggled to: ${simulationMode}`);
     res.json({ success: true, simulationMode });
   } else {
@@ -2196,24 +2567,15 @@ app.post('/api/ping-single', async (req, res) => {
 
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
-    const pingCmd = process.platform === 'win32' 
-      ? `ping -n 1 -w 1000 ${device.ip_address}`
-      : `ping -c 1 -W 1 ${device.ip_address}`;
-      
-    exec(pingCmd, async (err, stdout) => {
-      const isSuccess = !err;
-      let latency = null;
-      if (isSuccess) {
-        const match = stdout.match(/time[=<]([0-9.]+)\s*ms/i);
-        latency = match ? match[1] + 'ms' : '<1ms';
-      }
-      res.json({ 
-        success: isSuccess, 
-        ip_address: device.ip_address,
-        name: device.name,
-        latency: latency,
-        timestamp: new Date()
-      });
+    // Use our new standardized single ping helper with a 3000ms timeout for diagnostics
+    const result = await pingDeviceSingle(device.ip_address, 3000);
+    
+    res.json({ 
+      success: result.success, 
+      ip_address: device.ip_address,
+      name: device.name,
+      latency: result.success ? (result.latency + 'ms') : null,
+      timestamp: new Date()
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2341,14 +2703,42 @@ app.delete('/api/devices/:id', verifyAdmin, async (req, res) => {
 
 // Start initialization and start server
 async function main() {
+  // Start HTTP server IMMEDIATELY so clients can connect while DB initializes
+  server.listen(PORT, () => {
+    console.log(`FIDS Monitoring Dashboard running at http://localhost:${PORT}`);
+    console.log(`Initializing database connection...`);
+  });
+
+  // Initialize DB in background — clients get data as soon as DB is ready
   await initializeDatabase();
   startHeartbeatMonitor();
   startTelegramBotPolling();
-  
-  server.listen(PORT, () => {
-    console.log(`FIDS Monitoring Dashboard running at http://localhost:${PORT}`);
-  });
+  console.log(`All services started. Dashboard is fully operational.`);
+
+  // Broadcast fresh device data to any client that connected before DB was ready
+  try {
+    let devicesList = [];
+    let logsList = [];
+    if (useJsonFallback) {
+      devicesList = jsonDbState.devices || [];
+      logsList = (jsonDbState.logs || []).slice(0, 30).map(l => {
+        const d = (jsonDbState.devices || []).find(dev => dev.id === l.device_id);
+        return { ...l, name: d ? d.name : 'Device' };
+      });
+    } else if (pool) {
+      const [devicesRows] = await pool.query('SELECT * FROM devices');
+      const [logsRows] = await pool.query('SELECT l.*, d.name FROM logs l JOIN devices d ON l.device_id = d.id ORDER BY l.timestamp DESC LIMIT 30');
+      devicesList = devicesRows;
+      logsList = logsRows;
+    }
+    if (devicesList.length > 0) {
+      const dbStatus = useJsonFallback ? 'fallback' : 'connected';
+      broadcast({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } });
+      console.log(`[STARTUP] Pushed INIT_DATA broadcast to ${wss.clients.size} connected client(s).`);
+    }
+  } catch (err) {
+    console.error('[STARTUP] Failed to broadcast post-init data:', err.message);
+  }
 }
 
 main();
-

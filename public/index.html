@@ -50,11 +50,15 @@
             <button onclick="handleUserLogout()" style="background: none; border: none; color: #f87171; cursor: pointer; padding: 0; font-size: 11px; text-decoration: underline; margin-left: 4px;">Logout</button>
           </div>
         </div>
+        <span id="db-status-pill" class="connection-pill" style="display: none; align-items: center; gap: 6px; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25);">
+          <i class="fa-solid fa-spinner fa-spin"></i> Database: Loading Cache
+        </span>
         <span class="connection-pill active" id="ws-status">
           <span class="pulse-dot"></span> Connected
         </span>
       </div>
     </header>
+
 
     <!-- System Selector Navigation Tabs -->
     <div class="nav-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; flex-wrap: wrap;">
@@ -416,6 +420,7 @@
             <tr>
               <th>Device Status</th>
               <th>IP Address</th>
+              <th>Latency</th>
               <th>Device Name</th>
               <th>Equipment Type</th>
               <th>Terminal</th>
@@ -455,6 +460,13 @@
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
             <label for="cfg-ping-interval">Ping Interval (Milliseconds):</label>
             <input type="number" id="cfg-ping-interval" min="2000" max="60000" step="1000" style="width: 80px; padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <label for="cfg-offline-alarm">Enable Offline Alarm (Sound/Alert):</label>
+            <label class="switch-control">
+              <input type="checkbox" id="cfg-offline-alarm">
+              <span class="switch-slider"></span>
+            </label>
           </div>
           <button onclick="saveSchedulerConfig()" class="save-btn" style="margin-top: 6px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px;"><i class="fa-solid fa-floppy-disk"></i> Save Configurations</button>
         </div>
