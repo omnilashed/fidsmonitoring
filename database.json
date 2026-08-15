@@ -9,10 +9,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.81",
       "downtime_count": 0,
       "failed_access_count": 3,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 6,
@@ -23,10 +24,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.81",
       "downtime_count": 0,
       "failed_access_count": 2,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 7,
@@ -37,10 +39,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.81",
       "downtime_count": 0,
       "failed_access_count": 1,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 8,
@@ -51,10 +54,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "FIDS",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.81",
       "downtime_count": 0,
       "failed_access_count": 5,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 18,
@@ -65,10 +69,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 1,
-      "health_status_detail": null
+      "uptime_pct": "99.84",
+      "downtime_count": 2,
+      "failed_access_count": 3,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 19,
@@ -79,10 +84,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 1,
-      "health_status_detail": null
+      "uptime_pct": "99.84",
+      "downtime_count": 2,
+      "failed_access_count": 3,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 20,
@@ -93,10 +99,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 1,
-      "health_status_detail": null
+      "uptime_pct": "99.83",
+      "downtime_count": 1,
+      "failed_access_count": 2,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 21,
@@ -107,10 +114,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server FIDS",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 1,
-      "health_status_detail": null
+      "uptime_pct": "99.83",
+      "downtime_count": 3,
+      "failed_access_count": 4,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 9,
@@ -121,10 +129,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "IP PABX",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 2,
-      "health_status_detail": null
+      "uptime_pct": "99.83",
+      "downtime_count": 3,
+      "failed_access_count": 5,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 10,
@@ -135,10 +144,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "IP PABX",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.81",
       "downtime_count": 0,
       "failed_access_count": 2,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 11,
@@ -149,10 +159,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server CCTV",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 2,
-      "health_status_detail": null
+      "uptime_pct": "99.84",
+      "downtime_count": 1,
+      "failed_access_count": 3,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 12,
@@ -163,10 +174,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server CCTV",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.81",
       "downtime_count": 0,
       "failed_access_count": 1,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 13,
@@ -177,10 +189,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "CCTV",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 4,
-      "health_status_detail": null
+      "uptime_pct": "99.83",
+      "downtime_count": 3,
+      "failed_access_count": 7,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 14,
@@ -191,10 +204,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "CCTV",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 3,
-      "health_status_detail": null
+      "uptime_pct": "99.83",
+      "downtime_count": 3,
+      "failed_access_count": 6,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 15,
@@ -205,10 +219,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Server Fire Alarm System",
-      "uptime_pct": "99.90",
-      "downtime_count": 0,
-      "failed_access_count": 1,
-      "health_status_detail": null
+      "uptime_pct": "99.83",
+      "downtime_count": 2,
+      "failed_access_count": 3,
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 16,
@@ -219,10 +234,11 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Fire Alarm System",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.83",
       "downtime_count": 0,
       "failed_access_count": 1,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     },
     {
       "id": 17,
@@ -233,13 +249,294 @@
       "status": "Offline",
       "anomaly_type": null,
       "equipment_type": "Fire Alarm System",
-      "uptime_pct": "99.90",
+      "uptime_pct": "99.83",
       "downtime_count": 0,
       "failed_access_count": 1,
-      "health_status_detail": null
+      "health_status_detail": null,
+      "latency_ms": null
     }
   ],
   "logs": [
+    {
+      "device_id": 14,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.0.45",
+      "timestamp": "2026-08-15T05:35:09.885Z",
+      "id": 71
+    },
+    {
+      "device_id": 13,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.0.20",
+      "timestamp": "2026-08-15T05:35:09.883Z",
+      "id": 70
+    },
+    {
+      "device_id": 21,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.49",
+      "timestamp": "2026-08-15T05:35:09.882Z",
+      "id": 69
+    },
+    {
+      "device_id": 9,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.24.0.10",
+      "timestamp": "2026-08-15T05:35:09.880Z",
+      "id": 68
+    },
+    {
+      "device_id": 18,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.51",
+      "timestamp": "2026-08-15T05:35:09.877Z",
+      "id": 67
+    },
+    {
+      "device_id": 19,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.41",
+      "timestamp": "2026-08-15T05:35:09.870Z",
+      "id": 66
+    },
+    {
+      "device_id": 21,
+      "status": "Online",
+      "message": "FIDS-Server-Backup02 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:59.228Z",
+      "id": 65
+    },
+    {
+      "device_id": 13,
+      "status": "Online",
+      "message": "CCTV-Gate-3-Arrival is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:59.226Z",
+      "id": 64
+    },
+    {
+      "device_id": 14,
+      "status": "Online",
+      "message": "CCTV-Checkin-T1 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:59.212Z",
+      "id": 63
+    },
+    {
+      "device_id": 19,
+      "status": "Online",
+      "message": "FIDS-Server-Core02 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:59.211Z",
+      "id": 62
+    },
+    {
+      "device_id": 18,
+      "status": "Online",
+      "message": "FIDS-Server-Core01 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:59.195Z",
+      "id": 61
+    },
+    {
+      "device_id": 9,
+      "status": "Online",
+      "message": "PABX-Server-Core is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:59.165Z",
+      "id": 60
+    },
+    {
+      "device_id": 19,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.41",
+      "timestamp": "2026-08-15T05:34:29.892Z",
+      "id": 59
+    },
+    {
+      "device_id": 21,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.49",
+      "timestamp": "2026-08-15T05:34:29.889Z",
+      "id": 58
+    },
+    {
+      "device_id": 13,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.0.20",
+      "timestamp": "2026-08-15T05:34:29.889Z",
+      "id": 57
+    },
+    {
+      "device_id": 15,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.30.1",
+      "timestamp": "2026-08-15T05:34:29.887Z",
+      "id": 56
+    },
+    {
+      "device_id": 11,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.1.10",
+      "timestamp": "2026-08-15T05:34:29.886Z",
+      "id": 55
+    },
+    {
+      "device_id": 20,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.50",
+      "timestamp": "2026-08-15T05:34:29.885Z",
+      "id": 54
+    },
+    {
+      "device_id": 18,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.51",
+      "timestamp": "2026-08-15T05:34:29.884Z",
+      "id": 53
+    },
+    {
+      "device_id": 14,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.0.45",
+      "timestamp": "2026-08-15T05:34:29.874Z",
+      "id": 52
+    },
+    {
+      "device_id": 9,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.24.0.10",
+      "timestamp": "2026-08-15T05:34:29.866Z",
+      "id": 51
+    },
+    {
+      "device_id": 9,
+      "status": "Online",
+      "message": "PABX-Server-Core is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:19.253Z",
+      "id": 50
+    },
+    {
+      "device_id": 15,
+      "status": "Online",
+      "message": "FAS-Main-Server is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:19.224Z",
+      "id": 49
+    },
+    {
+      "device_id": 13,
+      "status": "Online",
+      "message": "CCTV-Gate-3-Arrival is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:19.223Z",
+      "id": 48
+    },
+    {
+      "device_id": 21,
+      "status": "Online",
+      "message": "FIDS-Server-Backup02 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:18.873Z",
+      "id": 47
+    },
+    {
+      "device_id": 14,
+      "status": "Online",
+      "message": "CCTV-Checkin-T1 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:34:18.865Z",
+      "id": 46
+    },
+    {
+      "device_id": 15,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.30.1",
+      "timestamp": "2026-08-15T05:34:09.867Z",
+      "id": 45
+    },
+    {
+      "device_id": 9,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.24.0.10",
+      "timestamp": "2026-08-15T05:34:09.864Z",
+      "id": 44
+    },
+    {
+      "device_id": 13,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.0.20",
+      "timestamp": "2026-08-15T05:34:09.864Z",
+      "id": 43
+    },
+    {
+      "device_id": 21,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 172.23.1.49",
+      "timestamp": "2026-08-15T05:34:09.862Z",
+      "id": 42
+    },
+    {
+      "device_id": 14,
+      "status": "Offline",
+      "message": "Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for 192.168.0.45",
+      "timestamp": "2026-08-15T05:34:09.861Z",
+      "id": 41
+    },
+    {
+      "device_id": 14,
+      "status": "Online",
+      "message": "CCTV-Checkin-T1 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:57.733Z",
+      "id": 40
+    },
+    {
+      "device_id": 13,
+      "status": "Online",
+      "message": "CCTV-Gate-3-Arrival is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:57.686Z",
+      "id": 39
+    },
+    {
+      "device_id": 15,
+      "status": "Online",
+      "message": "FAS-Main-Server is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:57.671Z",
+      "id": 38
+    },
+    {
+      "device_id": 9,
+      "status": "Online",
+      "message": "PABX-Server-Core is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:57.670Z",
+      "id": 37
+    },
+    {
+      "device_id": 20,
+      "status": "Online",
+      "message": "FIDS-Server-Backup01 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:56.860Z",
+      "id": 36
+    },
+    {
+      "device_id": 18,
+      "status": "Online",
+      "message": "FIDS-Server-Core01 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:56.837Z",
+      "id": 35
+    },
+    {
+      "device_id": 21,
+      "status": "Online",
+      "message": "FIDS-Server-Backup02 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:56.835Z",
+      "id": 34
+    },
+    {
+      "device_id": 19,
+      "status": "Online",
+      "message": "FIDS-Server-Core02 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:56.827Z",
+      "id": 33
+    },
+    {
+      "device_id": 11,
+      "status": "Online",
+      "message": "CCTV-Storage-Svr01 is back online (Health Check: Ping).",
+      "timestamp": "2026-08-15T05:33:56.814Z",
+      "id": 32
+    },
     {
       "device_id": 14,
       "status": "Offline",
@@ -752,6 +1049,125 @@
       "downtime_seconds": 90,
       "incident_count": 0,
       "uptime_pct": 99.8958
+    },
+    {
+      "device_id": 7,
+      "date": "2026-08-15",
+      "downtime_seconds": 160,
+      "incident_count": 0,
+      "uptime_pct": 99.8148
+    },
+    {
+      "device_id": 20,
+      "date": "2026-08-15",
+      "downtime_seconds": 145,
+      "incident_count": 1,
+      "uptime_pct": 99.8322
+    },
+    {
+      "device_id": 5,
+      "date": "2026-08-15",
+      "downtime_seconds": 160,
+      "incident_count": 0,
+      "uptime_pct": 99.8148
+    },
+    {
+      "device_id": 14,
+      "date": "2026-08-15",
+      "downtime_seconds": 145,
+      "incident_count": 3,
+      "uptime_pct": 99.8322
+    },
+    {
+      "device_id": 8,
+      "date": "2026-08-15",
+      "downtime_seconds": 160,
+      "incident_count": 0,
+      "uptime_pct": 99.8148
+    },
+    {
+      "device_id": 12,
+      "date": "2026-08-15",
+      "downtime_seconds": 160,
+      "incident_count": 0,
+      "uptime_pct": 99.8148
+    },
+    {
+      "device_id": 19,
+      "date": "2026-08-15",
+      "downtime_seconds": 140,
+      "incident_count": 2,
+      "uptime_pct": 99.838
+    },
+    {
+      "device_id": 9,
+      "date": "2026-08-15",
+      "downtime_seconds": 145,
+      "incident_count": 3,
+      "uptime_pct": 99.8322
+    },
+    {
+      "device_id": 21,
+      "date": "2026-08-15",
+      "downtime_seconds": 145,
+      "incident_count": 3,
+      "uptime_pct": 99.8322
+    },
+    {
+      "device_id": 18,
+      "date": "2026-08-15",
+      "downtime_seconds": 140,
+      "incident_count": 2,
+      "uptime_pct": 99.838
+    },
+    {
+      "device_id": 13,
+      "date": "2026-08-15",
+      "downtime_seconds": 145,
+      "incident_count": 3,
+      "uptime_pct": 99.8322
+    },
+    {
+      "device_id": 11,
+      "date": "2026-08-15",
+      "downtime_seconds": 145,
+      "incident_count": 1,
+      "uptime_pct": 99.8322
+    },
+    {
+      "device_id": 10,
+      "date": "2026-08-15",
+      "downtime_seconds": 160,
+      "incident_count": 0,
+      "uptime_pct": 99.8148
+    },
+    {
+      "device_id": 6,
+      "date": "2026-08-15",
+      "downtime_seconds": 160,
+      "incident_count": 0,
+      "uptime_pct": 99.8148
+    },
+    {
+      "device_id": 15,
+      "date": "2026-08-15",
+      "downtime_seconds": 150,
+      "incident_count": 2,
+      "uptime_pct": 99.8264
+    },
+    {
+      "device_id": 17,
+      "date": "2026-08-15",
+      "downtime_seconds": 150,
+      "incident_count": 0,
+      "uptime_pct": 99.8264
+    },
+    {
+      "device_id": 16,
+      "date": "2026-08-15",
+      "downtime_seconds": 150,
+      "incident_count": 0,
+      "uptime_pct": 99.8264
     }
   ],
   "users": [
@@ -773,6 +1189,7 @@
     "telegram_token": "",
     "telegram_chat_id": "",
     "scheduler_batch_size": "30",
-    "scheduler_ping_interval": "10000"
+    "scheduler_ping_interval": "10000",
+    "offline_alarm_enabled": "true"
   }
 }

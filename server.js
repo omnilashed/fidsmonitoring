@@ -89,7 +89,6 @@ app.use('/novnc-dist', express.static(path.join(__dirname, 'node_modules', '@nov
 // Database pool setup
 let pool = null;
 let useJsonFallback = false;
-let simulationMode = false; // Default to false for real FIDS network monitoring
 
 
 // Initial list of devices in the requested subnets
@@ -153,6 +152,13 @@ let jsonDbState = {
 if (fs.existsSync(JSON_DB_FILE)) {
   try {
     jsonDbState = JSON.parse(fs.readFileSync(JSON_DB_FILE, 'utf8'));
+    if (jsonDbState && Array.isArray(jsonDbState.devices)) {
+      jsonDbState.devices.forEach(d => {
+        if (d.offline_since === undefined) {
+          d.offline_since = null;
+        }
+      });
+    }
   } catch (err) {
     console.error('Failed to parse database.json on early startup:', err.message);
   }
@@ -206,6 +212,7 @@ async function initializeDatabase() {
         downtime_count INT DEFAULT 0,
         failed_access_count INT DEFAULT 0,
         latency_ms INT DEFAULT NULL,
+        offline_since TIMESTAMP NULL DEFAULT NULL,
         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
@@ -225,6 +232,12 @@ async function initializeDatabase() {
 
     try {
       await pool.query(`ALTER TABLE devices ADD COLUMN latency_ms INT DEFAULT NULL`);
+    } catch (err) {
+      // Column already exists, ignore
+    }
+
+    try {
+      await pool.query(`ALTER TABLE devices ADD COLUMN offline_since TIMESTAMP NULL DEFAULT NULL`);
     } catch (err) {
       // Column already exists, ignore
     }
@@ -935,71 +948,43 @@ async function pingDevice(device) {
   let isVncSuccess = false;
   let finalLatency = null;
 
-  if (simulationMode) {
-    if (!isLocalhost) {
-      const roll = Math.random();
-      if (roll < 0.7) {
-        isPingSuccess = true;
-        isVncSuccess = true;
-        finalLatency = Math.floor(Math.random() * 30) + 5; // 5-35 ms
-      } else if (roll < 0.8) {
-        isPingSuccess = false;
-        isVncSuccess = true; // VNC Online only, Ping RTO case
-        finalLatency = Math.floor(Math.random() * 100) + 50; // 50-150 ms
-      } else if (roll < 0.9) {
-        isPingSuccess = true;
-        isVncSuccess = false;
-        finalLatency = Math.floor(Math.random() * 50) + 10;
-      } else {
-        isPingSuccess = false;
-        isVncSuccess = false;
-        finalLatency = null;
-      }
-    } else {
-      isPingSuccess = true;
-      isVncSuccess = true;
-      finalLatency = 1;
-    }
+  // Real-world checks: Escalation Ping + VNC TCP check
+  // 1st Ping attempt: 1000ms timeout
+  let pingRes = await pingDeviceSingle(device.ip_address, 1000);
+  if (pingRes.success) {
+    isPingSuccess = true;
+    finalLatency = pingRes.latency;
   } else {
-    // Real-world checks: Escalation Ping + VNC TCP check
-    // 1st Ping attempt: 1000ms timeout
-    let pingRes = await pingDeviceSingle(device.ip_address, 1000);
+    // 2nd Ping attempt: 1500ms timeout with 100ms stagger wait
+    await new Promise(r => setTimeout(r, 100));
+    pingRes = await pingDeviceSingle(device.ip_address, 1500);
     if (pingRes.success) {
       isPingSuccess = true;
       finalLatency = pingRes.latency;
     } else {
-      // 2nd Ping attempt: 1500ms timeout with 100ms stagger wait
+      // 3rd Ping attempt: 1500ms timeout with 100ms stagger wait
       await new Promise(r => setTimeout(r, 100));
       pingRes = await pingDeviceSingle(device.ip_address, 1500);
       if (pingRes.success) {
         isPingSuccess = true;
         finalLatency = pingRes.latency;
-      } else {
-        // 3rd Ping attempt: 1500ms timeout with 100ms stagger wait
-        await new Promise(r => setTimeout(r, 100));
-        pingRes = await pingDeviceSingle(device.ip_address, 1500);
-        if (pingRes.success) {
-          isPingSuccess = true;
-          finalLatency = pingRes.latency;
-        }
       }
-    }
-
-    // Connect to VNC Port (5900)
-    const startVncTime = Date.now();
-    isVncSuccess = await checkVncPort(device.ip_address, 2000, sourceIp);
-
-    // Fallback: If VNC succeeds but ping fails, use VNC connection time as latency
-    if (isVncSuccess && !isPingSuccess) {
-      finalLatency = Date.now() - startVncTime;
-    }
-
-    // Log which interface is being used (helpful for debugging)
-    if (sourceIp) {
-      console.log(`[BIND] ${device.ip_address} → source: ${sourceIp} (${device.equipment_type || 'device'})`);
     }
   }
 
+  // Connect to VNC Port (5900)
+  const startVncTime = Date.now();
+  isVncSuccess = await checkVncPort(device.ip_address, 2000, sourceIp);
+
+  // Fallback: If VNC succeeds but ping fails, use VNC connection time as latency
+  if (isVncSuccess && !isPingSuccess) {
+    finalLatency = Date.now() - startVncTime;
+  }
+
+  // Log which interface is being used (helpful for debugging)
+  if (sourceIp) {
+    console.log(`[BIND] ${device.ip_address} → source: ${sourceIp} (${device.equipment_type || 'device'})`);
+  }
 
   const isOnline = isPingSuccess || isVncSuccess;
   let healthStatusDetail = null;
@@ -1015,34 +1000,21 @@ async function pingDevice(device) {
   let anomalyType = null;
   let logMsg = '';
 
-  if (simulationMode && isOnline) {
-    const roll = Math.random();
-    if (roll < 0.1) {
-      newStatus = 'Anomaly';
-      const types = ['Force Logout', 'Freeze Screen', 'High CPU/RAM'];
-      anomalyType = types[Math.floor(Math.random() * types.length)];
-      logMsg = `Detected anomaly [${anomalyType}] on ${device.name}`;
-    } else {
+  // Real-world mapping
+  if (isOnline) {
+    if (device.status === 'Offline') {
       newStatus = 'Online';
+      anomalyType = null;
       logMsg = `${device.name} is back online (Health Check: ${healthStatusDetail}).`;
+    } else {
+      newStatus = device.status;
+      anomalyType = device.anomaly_type;
+      logMsg = `Heartbeat success for ${device.name} via ${healthStatusDetail}`;
     }
   } else {
-    // Real-world mapping
-    if (isOnline) {
-      if (device.status === 'Offline') {
-        newStatus = 'Online';
-        anomalyType = null;
-        logMsg = `${device.name} is back online (Health Check: ${healthStatusDetail}).`;
-      } else {
-        newStatus = device.status;
-        anomalyType = device.anomaly_type;
-        logMsg = `Heartbeat success for ${device.name} via ${healthStatusDetail}`;
-      }
-    } else {
-      newStatus = 'Offline';
-      anomalyType = null;
-      logMsg = `Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for ${device.ip_address}`;
-    }
+    newStatus = 'Offline';
+    anomalyType = null;
+    logMsg = `Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for ${device.ip_address}`;
   }
 
   try {
@@ -1050,12 +1022,22 @@ async function pingDevice(device) {
     const isLatencyChanged = device.latency_ms !== finalLatency;
 
     if (isStatusChanged || isLatencyChanged) {
+      let newOfflineSince = device.offline_since;
+      if (newStatus === 'Offline') {
+        if (device.status !== 'Offline') {
+          newOfflineSince = new Date();
+        }
+      } else {
+        newOfflineSince = null;
+      }
+
       let updatedDevice = { 
         ...device, 
         status: newStatus, 
         anomaly_type: anomalyType, 
         health_status_detail: healthStatusDetail,
-        latency_ms: finalLatency
+        latency_ms: finalLatency,
+        offline_since: newOfflineSince
       };
       
       if (isStatusChanged && newStatus === 'Offline') {
@@ -1073,13 +1055,13 @@ async function pingDevice(device) {
       } else {
         if (newStatus === 'Offline') {
           await pool.query(
-            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, failed_access_count = ?, downtime_count = ?, uptime_pct = ?, latency_ms = ? WHERE id = ?`,
-            [newStatus, anomalyType, healthStatusDetail, updatedDevice.failed_access_count, updatedDevice.downtime_count, updatedDevice.uptime_pct, finalLatency, device.id]
+            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, failed_access_count = ?, downtime_count = ?, uptime_pct = ?, latency_ms = ?, offline_since = ? WHERE id = ?`,
+            [newStatus, anomalyType, healthStatusDetail, updatedDevice.failed_access_count, updatedDevice.downtime_count, updatedDevice.uptime_pct, finalLatency, newOfflineSince, device.id]
           );
         } else {
           await pool.query(
-            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, latency_ms = ? WHERE id = ?`,
-            [newStatus, anomalyType, healthStatusDetail, finalLatency, device.id]
+            `UPDATE devices SET status = ?, anomaly_type = ?, health_status_detail = ?, latency_ms = ?, offline_since = ? WHERE id = ?`,
+            [newStatus, anomalyType, healthStatusDetail, finalLatency, newOfflineSince, device.id]
           );
         }
       }
@@ -1234,6 +1216,14 @@ async function runHeartbeatIteration() {
         const device = queue.shift();
         if (device) {
           try {
+            const isSuspended = device.status === 'Offline' && device.offline_since && 
+              (Date.now() - new Date(device.offline_since).getTime() > 10 * 60 * 1000);
+            
+            if (isSuspended) {
+              console.log(`[SKIP] Skipping background ping for suspended device: ${device.name} (${device.ip_address})`);
+              continue;
+            }
+
             await pingDevice(device);
           } catch (pingErr) {
             console.error(`Error checking device ${device.ip_address}:`, pingErr);
@@ -1356,11 +1346,11 @@ wss.on('connection', async (ws, req) => {
       logsList = logsRows;
     }
 
-    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
+    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode: false, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
   } catch (err) {
     console.error('Error fetching init data for WS client:', err);
     // Send empty init so the client at least connects
-    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: [], logs: [], dbStatus: 'fallback', config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
+    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: [], logs: [], dbStatus: 'fallback', config: { simulationMode: false, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
   }
 });
 
@@ -1835,7 +1825,7 @@ app.post('/api/config/scheduler', async (req, res) => {
     broadcast({
       type: 'CONFIG_UPDATED',
       config: {
-        simulationMode,
+        simulationMode: false,
         offlineAlarmEnabled: OFFLINE_ALARM_ENABLED
       }
     });
@@ -2290,9 +2280,63 @@ app.post('/api/admin/reset-daily-uptime', async (req, res) => {
   }
 });
 
+// Action: Clear status logs older than 3 days and delete temporary dump files
+app.post('/api/admin/clear-logs', async (req, res) => {
+  try {
+    let affectedRows = 0;
+    if (useJsonFallback) {
+      const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+      const initialCount = jsonDbState.logs.length;
+      jsonDbState.logs = jsonDbState.logs.filter(l => new Date(l.timestamp).getTime() >= threeDaysAgo);
+      saveJsonDb();
+      affectedRows = initialCount - jsonDbState.logs.length;
+    } else {
+      const [result] = await pool.query('DELETE FROM logs WHERE timestamp < NOW() - INTERVAL 3 DAY');
+      affectedRows = result.affectedRows;
+    }
+
+    // Delete the temporary dump file devices.json if it exists
+    const dumpFile = path.join(__dirname, 'devices.json');
+    let dumpDeleted = false;
+    if (fs.existsSync(dumpFile)) {
+      try {
+        fs.unlinkSync(dumpFile);
+        dumpDeleted = true;
+        console.log('[MAINTENANCE] devices.json successfully deleted.');
+      } catch (err) {
+        console.error('Failed to delete devices.json:', err.message);
+      }
+    }
+
+    console.log(`[MAINTENANCE] Cleared ${affectedRows} logs older than 3 days. Dump file deleted: ${dumpDeleted}`);
+    
+    // Broadcast refreshed log list
+    let logsList = [];
+    let devicesList = [];
+    if (useJsonFallback) {
+      devicesList = jsonDbState.devices || [];
+      logsList = (jsonDbState.logs || []).slice(0, 30).map(l => {
+        const d = (jsonDbState.devices || []).find(dev => dev.id === l.device_id);
+        return { ...l, name: d ? d.name : 'Device' };
+      });
+    } else if (pool) {
+      const [devicesRows] = await pool.query('SELECT * FROM devices');
+      devicesList = devicesRows;
+      const [logsRows] = await pool.query('SELECT l.*, d.name FROM logs l JOIN devices d ON l.device_id = d.id ORDER BY l.timestamp DESC LIMIT 30');
+      logsList = logsRows;
+    }
+    broadcast({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus: useJsonFallback ? 'fallback' : 'connected', config: { simulationMode: false, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } });
+
+    res.json({ success: true, affectedRows, dumpDeleted });
+  } catch (err) {
+    console.error('Failed to run system maintenance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Config: Get current settings
 app.get('/api/config', (req, res) => {
-  res.json({ simulationMode });
+  res.json({ simulationMode: false });
 });
 
 // Network: Return detected local interfaces + subnet routing info
@@ -2316,17 +2360,9 @@ app.get('/api/network-interfaces', (req, res) => {
   res.json({ interfaces: result });
 });
 
-// Config: Update settings
+// Config: Update settings (legacy - Simulation Mode is removed)
 app.post('/api/config', (req, res) => {
-  const mode = req.body.simulationMode;
-  if (typeof mode === 'boolean') {
-    simulationMode = mode;
-    broadcast({ type: 'CONFIG_UPDATED', config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } });
-    console.log(`[CONFIG] Simulation Mode toggled to: ${simulationMode}`);
-    res.json({ success: true, simulationMode });
-  } else {
-    res.status(400).json({ error: 'simulationMode must be a boolean.' });
-  }
+  res.json({ success: true, simulationMode: false });
 });
 
 // Telemetry: FIDS Client agent reporting (real CPU/RAM/App logs)
@@ -2545,6 +2581,20 @@ app.post('/api/ping-test', async (req, res) => {
         ? `Manual Ping Success: ${device.ip_address} responded in <10ms.`
         : `Manual Ping Fail: ${device.ip_address} timed out or network is unreachable.`;
       
+      if (isSuccess) {
+        const updatedDevice = { ...device, status: 'Online', anomaly_type: null, offline_since: null };
+        if (useJsonFallback) {
+          const idx = jsonDbState.devices.findIndex(d => d.id === deviceId);
+          if (idx !== -1) {
+            jsonDbState.devices[idx] = updatedDevice;
+            saveJsonDb();
+          }
+        } else {
+          await pool.query('UPDATE devices SET status = "Online", anomaly_type = NULL, offline_since = NULL WHERE id = ?', [deviceId]);
+        }
+        broadcast({ type: 'DEVICE_UPDATED', device: updatedDevice });
+      }
+
       await logStatusChange(deviceId, isSuccess ? 'Online' : 'Offline', message);
       res.json({ success: isSuccess, message });
     });
@@ -2649,7 +2699,8 @@ app.put('/api/devices/:id', verifyAdmin, async (req, res) => {
       name: name || device.name,
       location: location || device.location,
       terminal: terminal || device.terminal,
-      equipment_type: equipment_type || device.equipment_type
+      equipment_type: equipment_type || device.equipment_type,
+      offline_since: null
     };
 
     if (useJsonFallback) {
@@ -2658,13 +2709,120 @@ app.put('/api/devices/:id', verifyAdmin, async (req, res) => {
       saveJsonDb();
     } else {
       await pool.query(
-        `UPDATE devices SET ip_address = ?, name = ?, location = ?, terminal = ?, equipment_type = ? WHERE id = ?`,
+        `UPDATE devices SET ip_address = ?, name = ?, location = ?, terminal = ?, equipment_type = ?, offline_since = NULL WHERE id = ?`,
         [updatedDevice.ip_address, updatedDevice.name, updatedDevice.location, updatedDevice.terminal, updatedDevice.equipment_type, deviceId]
       );
     }
 
     await logStatusChange(deviceId, device.status, `System Info: Updated FIDS configuration for ${updatedDevice.name}`);
     broadcast({ type: 'DEVICE_UPDATED', device: updatedDevice });
+    res.json({ success: true, device: updatedDevice });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual Suspend: Suspend background monitoring for a device
+app.post('/api/suspend-device', async (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId) {
+    return res.status(400).json({ error: 'deviceId is required' });
+  }
+
+  try {
+    let device = null;
+    if (useJsonFallback) {
+      device = jsonDbState.devices.find(d => d.id === parseInt(deviceId));
+    } else {
+      const [rows] = await pool.query('SELECT * FROM devices WHERE id = ?', [deviceId]);
+      if (rows.length > 0) device = rows[0];
+    }
+
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+
+    // Set status to Offline, health_status_detail to 'Suspended (Manual)'
+    // and offline_since to 15 minutes ago so it is immediately suspended
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const updatedDevice = {
+      ...device,
+      status: 'Offline',
+      health_status_detail: 'Suspended (Manual)',
+      offline_since: fifteenMinutesAgo
+    };
+
+    if (useJsonFallback) {
+      const idx = jsonDbState.devices.findIndex(d => d.id === device.id);
+      if (idx !== -1) {
+        jsonDbState.devices[idx] = updatedDevice;
+        saveJsonDb();
+      }
+    } else {
+      await pool.query(
+        `UPDATE devices SET status = 'Offline', health_status_detail = 'Suspended (Manual)', offline_since = ? WHERE id = ?`,
+        [fifteenMinutesAgo, device.id]
+      );
+    }
+
+    await logStatusChange(device.id, 'Offline', `Operator manual action: Device suspended from active background monitoring.`);
+    broadcast({ type: 'DEVICE_UPDATED', device: updatedDevice });
+
+    res.json({ success: true, device: updatedDevice });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual Resume: Resume background monitoring for a device
+app.post('/api/resume-device', async (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId) {
+    return res.status(400).json({ error: 'deviceId is required' });
+  }
+
+  try {
+    let device = null;
+    if (useJsonFallback) {
+      device = jsonDbState.devices.find(d => d.id === parseInt(deviceId));
+    } else {
+      const [rows] = await pool.query('SELECT * FROM devices WHERE id = ?', [deviceId]);
+      if (rows.length > 0) device = rows[0];
+    }
+
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+
+    // Reset offline_since to NULL
+    const updatedDevice = {
+      ...device,
+      offline_since: null
+    };
+
+    if (useJsonFallback) {
+      const idx = jsonDbState.devices.findIndex(d => d.id === device.id);
+      if (idx !== -1) {
+        jsonDbState.devices[idx] = updatedDevice;
+        saveJsonDb();
+      }
+    } else {
+      await pool.query(
+        `UPDATE devices SET offline_since = NULL WHERE id = ?`,
+        [device.id]
+      );
+    }
+
+    await logStatusChange(device.id, device.status, `Operator manual action: Resumed background monitoring.`);
+    
+    // Broadcast change
+    broadcast({ type: 'DEVICE_UPDATED', device: updatedDevice });
+
+    // Trigger an asynchronous ping check immediately to update current status
+    setTimeout(async () => {
+      try {
+        await pingDevice(updatedDevice);
+      } catch (pingErr) {
+        console.error('Failed to trigger immediate ping check on resume:', pingErr);
+      }
+    }, 0);
+
     res.json({ success: true, device: updatedDevice });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2733,7 +2891,7 @@ async function main() {
     }
     if (devicesList.length > 0) {
       const dbStatus = useJsonFallback ? 'fallback' : 'connected';
-      broadcast({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } });
+      broadcast({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode: false, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } });
       console.log(`[STARTUP] Pushed INIT_DATA broadcast to ${wss.clients.size} connected client(s).`);
     }
   } catch (err) {

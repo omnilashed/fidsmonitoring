@@ -28,13 +28,6 @@
       </div>
       <div class="system-time-controls">
         <div id="live-time" class="time-display">00:00:00</div>
-        <div class="sim-mode-toggle-container tooltip" data-tooltip="Toggle Demo Simulation Mode">
-          <span class="toggle-label">Demo Mode</span>
-          <label class="switch-control">
-            <input type="checkbox" id="sim-mode-checkbox">
-            <span class="switch-slider"></span>
-          </label>
-        </div>
         <button id="theme-toggle-btn" class="icon-btn tooltip" data-tooltip="Switch Theme">
           <i class="fa-solid fa-moon"></i>
         </button>
@@ -497,6 +490,21 @@
             <button onclick="saveSchedulerConfig()" class="save-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px;"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
             <button onclick="testTelegramAlert()" class="test-tg-btn" style="flex: 1; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; cursor: pointer; transition: all 0.2s; font-size: 13px;"><i class="fa-solid fa-paper-plane"></i> Test Send</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Database Maintenance Configurations -->
+      <div class="glass" style="padding: 20px; border-radius: 12px;">
+        <div class="container-title" style="margin-bottom: 16px;">
+          <h3><i class="fa-solid fa-screwdriver-wrench" style="color: #ec4899; margin-right: 6px;"></i> System Maintenance</h3>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+          <p style="color: var(--text-muted); font-size: 12px; margin: 0; line-height: 1.4; min-height: 110px;">
+            Clean up historical system log data to optimize query speeds. Deletes logs older than 3 days, and cleans up temporary dump files.
+          </p>
+          <button id="clear-logs-btn" onclick="clearStatusLogs()" class="save-btn" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25); width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; cursor: pointer; transition: all 0.2s; font-size: 13px;">
+            <i class="fa-solid fa-trash-can"></i> Clear Logs & Dumps
+          </button>
         </div>
       </div>
 

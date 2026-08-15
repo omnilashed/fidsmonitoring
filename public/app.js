@@ -170,25 +170,7 @@ function setupEventListeners() {
     renderTable();
   });
 
-  // Simulation Mode Toggle Listener
-  document.getElementById('sim-mode-checkbox').addEventListener('change', async (e) => {
-    const isSimMode = e.target.checked;
-    try {
-      const response = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ simulationMode: isSimMode })
-      });
-      const result = await response.json();
-      if (!result.success) {
-        e.target.checked = !isSimMode;
-        alert('Failed to toggle simulation mode.');
-      }
-    } catch (err) {
-      e.target.checked = !isSimMode;
-      console.error('Failed to update config:', err);
-    }
-  });
+
 
   // Close Ping Modal Listener
   document.getElementById('close-ping-btn').addEventListener('click', () => {
@@ -258,7 +240,6 @@ function initWebSocket() {
       devices = data.devices;
       logs = data.logs.slice(0, 30);
       if (data.config) {
-        document.getElementById('sim-mode-checkbox').checked = data.config.simulationMode;
         if (data.config.offlineAlarmEnabled !== undefined) {
           offlineAlarmEnabled = data.config.offlineAlarmEnabled === true || data.config.offlineAlarmEnabled === 'true';
         }
@@ -297,7 +278,6 @@ function initWebSocket() {
         renderAdminDevices();
       }
     } else if (data.type === 'CONFIG_UPDATED') {
-      document.getElementById('sim-mode-checkbox').checked = data.config.simulationMode;
       if (data.config.offlineAlarmEnabled !== undefined) {
         offlineAlarmEnabled = data.config.offlineAlarmEnabled === true || data.config.offlineAlarmEnabled === 'true';
       }
@@ -614,50 +594,67 @@ function renderGrid() {
   
   sliced.forEach(device => {
     const card = document.createElement('div');
-    card.className = `device-card glass ${device.status.toLowerCase()}`;
-    
-    // Status text details
+    const suspended = isDeviceSuspended(device);
     let statusLabel = device.status;
-    if (device.status === 'Online' && device.health_status_detail) {
+    if (suspended || device.health_status_detail === 'Suspended (Manual)') {
+      statusLabel = 'Offline (Suspended)';
+    } else if (device.status === 'Online' && device.health_status_detail) {
       statusLabel = `Online (${device.health_status_detail})`;
     }
-    let statusBadge = `<span class="status-indicator ${device.status.toLowerCase()}">${statusLabel}</span>`;
-    if (device.status === 'Anomaly') {
+
+    const isActuallySuspended = statusLabel === 'Offline (Suspended)';
+    const cardClass = isActuallySuspended ? 'suspended' : device.status.toLowerCase();
+    card.className = `device-card glass ${cardClass}`;
+    
+    let statusBadge = `<span class="status-indicator ${isActuallySuspended ? 'suspended' : device.status.toLowerCase()}">${statusLabel}</span>`;
+    if (device.status === 'Anomaly' && !isActuallySuspended) {
       statusBadge = `<span class="status-indicator anomaly tooltip" data-tooltip="${device.anomaly_type}">${device.status}</span>`;
     }
     
     // Action buttons based on status
     let actionBtnHtml = '';
-    if (device.status === 'Anomaly') {
+    if (isActuallySuspended) {
+      actionBtnHtml = `<button onclick="manuallyReactivateDevice(${device.id})" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);"><i class="fa-solid fa-play"></i> Resume</button>`;
+    } else if (device.status === 'Anomaly') {
+      let mainAction = '';
       if (device.anomaly_type === 'Force Logout') {
-        actionBtnHtml = `<button class="primary-btn" onclick="triggerDeviceAction(${device.id}, 'force-login')">Force Login</button>`;
+        mainAction = `<button class="primary-btn" onclick="triggerDeviceAction(${device.id}, 'force-login')">Force Login</button>`;
       } else {
-        actionBtnHtml = `<button class="primary-btn" onclick="triggerDeviceAction(${device.id}, 'restart-app')">Restart App</button>`;
+        mainAction = `<button class="primary-btn" onclick="triggerDeviceAction(${device.id}, 'restart-app')">Restart App</button>`;
       }
+      actionBtnHtml = `
+        ${mainAction}
+        <button onclick="manuallySuspendDevice(${device.id})" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.25);"><i class="fa-solid fa-ban"></i> Suspend</button>
+      `;
+    } else if (device.status === 'Offline') {
+      actionBtnHtml = `
+        <button onclick="triggerDeviceAction(${device.id}, 'ping-test')">Ping Test</button>
+        <button onclick="manuallySuspendDevice(${device.id})" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.25);"><i class="fa-solid fa-ban"></i> Suspend</button>
+      `;
     } else {
       actionBtnHtml = `<button onclick="triggerDeviceAction(${device.id}, 'ping-test')">Ping Test</button>`;
     }
     
-      // Conditional operational buttons based on equipment type
-      let typeActionsHtml = '';
-      if (device.equipment_type === 'FIDS' || device.equipment_type === 'Server FIDS') {
-        typeActionsHtml = `<button class="vnc-btn" onclick="openRemoteVnc('${device.ip_address}', '${device.name}')" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;"><i class="fa-solid fa-desktop"></i> Remote</button>`;
-      } else if (device.equipment_type === 'Server CCTV') {
-        typeActionsHtml = `
-          <button class="vnc-btn" onclick="openRemoteVnc('${device.ip_address}', '${device.name}')" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 4px 8px; font-size:10px;"><i class="fa-solid fa-desktop"></i> VNC</button>
-          <button class="rdp-btn" onclick="downloadRdpConfig('${device.ip_address}', '${device.name}')" style="background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 4px 8px; font-size:10px;"><i class="fa-solid fa-network-wired"></i> RDP</button>
-        `;
-      } else if (device.equipment_type === 'CCTV' || device.equipment_type === 'IP PABX') {
-        typeActionsHtml = `<button class="view-btn" onclick="openDeviceWebView('${device.ip_address}', '${device.name}', '${device.equipment_type}')" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;"><i class="fa-solid fa-eye"></i> View</button>`;
-      }
+    // Conditional operational buttons based on equipment type
+    let typeActionsHtml = '';
+    if (device.equipment_type === 'FIDS' || device.equipment_type === 'Server FIDS') {
+      typeActionsHtml = `<button class="vnc-btn" onclick="openRemoteVnc('${device.ip_address}', '${device.name}')" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;"><i class="fa-solid fa-desktop"></i> Remote</button>`;
+    } else if (device.equipment_type === 'Server CCTV') {
+      typeActionsHtml = `
+        <button class="vnc-btn" onclick="openRemoteVnc('${device.ip_address}', '${device.name}')" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 4px 8px; font-size:10px;"><i class="fa-solid fa-desktop"></i> VNC</button>
+        <button class="rdp-btn" onclick="downloadRdpConfig('${device.ip_address}', '${device.name}')" style="background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 4px 8px; font-size:10px;"><i class="fa-solid fa-network-wired"></i> RDP</button>
+      `;
+    } else if (device.equipment_type === 'CCTV' || device.equipment_type === 'IP PABX') {
+      typeActionsHtml = `<button class="view-btn" onclick="openDeviceWebView('${device.ip_address}', '${device.name}', '${device.equipment_type}')" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;"><i class="fa-solid fa-eye"></i> View</button>`;
+    }
 
-      const latencyVal = device.status !== 'Offline' && device.latency_ms !== null ? `${device.latency_ms} ms` : '-';
-      const latencyColor = device.status === 'Offline' ? 'var(--text-muted)' : (device.latency_ms < 50 ? '#10b981' : (device.latency_ms < 150 ? '#fbbf24' : '#ef4444'));
+    const latencyVal = !isActuallySuspended && device.status !== 'Offline' && device.latency_ms !== null ? `${device.latency_ms} ms` : '-';
+    const latencyColor = isActuallySuspended || device.status === 'Offline' ? 'var(--text-muted)' : (device.latency_ms < 50 ? '#10b981' : (device.latency_ms < 150 ? '#fbbf24' : '#ef4444'));
 
-      card.innerHTML = `
+    card.innerHTML = `
       <div class="card-top">
         <div class="device-title">
-          <h4><i class="fa-solid fa-display status-icon ${device.status.toLowerCase()}"></i> ${device.name}</h4>
+          <h4><i class="fa-solid ${isActuallySuspended ? 'fa-screwdriver-wrench' : 'fa-display'} status-icon ${isActuallySuspended ? 'suspended' : device.status.toLowerCase()}"></i> ${device.name}</h4>
           <span class="device-ip">${device.ip_address}</span>
         </div>
         ${statusBadge}
@@ -843,34 +840,53 @@ function renderTable() {
   sliced.forEach(device => {
     const row = document.createElement('tr');
     
-    // Status text with CSS classes using monitor icon
+    const suspended = isDeviceSuspended(device);
     let statusLabel = 'Online';
-    if (device.health_status_detail) {
+    if (suspended || device.health_status_detail === 'Suspended (Manual)') {
+      statusLabel = 'Offline (Suspended)';
+    } else if (device.health_status_detail) {
       statusLabel = `Online (${device.health_status_detail})`;
     }
+
+    const isActuallySuspended = statusLabel === 'Offline (Suspended)';
+    
     let statusText = `<span class="text-green"><i class="fa-solid fa-display"></i> ${statusLabel}</span>`;
-    if (device.status === 'Offline') {
+    if (isActuallySuspended) {
+      statusText = `<span style="color: #9ca3af;"><i class="fa-solid fa-screwdriver-wrench"></i> Offline (Suspended)</span>`;
+    } else if (device.status === 'Offline') {
       statusText = `<span class="text-red"><i class="fa-solid fa-display"></i> Offline</span>`;
     } else if (device.status === 'Anomaly') {
       statusText = `<span class="text-yellow"><i class="fa-solid fa-display"></i> Anomaly</span>`;
     }
     
     // Anomaly column text details
-    const anomalyDetails = device.anomaly_type 
+    const anomalyDetails = !isActuallySuspended && device.anomaly_type 
       ? `<span class="table-tag text-yellow">${device.anomaly_type}</span>` 
       : '<span style="color:var(--text-muted);">-</span>';
     
     // Operations buttons
     let actionsHtml = '';
-    if (device.status === 'Anomaly') {
+    if (isActuallySuspended) {
+      actionsHtml = `<button onclick="manuallyReactivateDevice(${device.id})" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);"><i class="fa-solid fa-play"></i> Resume</button>`;
+    } else if (device.status === 'Anomaly') {
+      let mainAction = '';
       if (device.anomaly_type === 'Force Logout') {
-        actionsHtml = `
+        mainAction = `
           <button class="login-btn" onclick="triggerDeviceAction(${device.id}, 'force-login')"><i class="fa-solid fa-right-to-bracket"></i> Force Login</button>
           <button class="restart-btn" onclick="triggerDeviceAction(${device.id}, 'restart-app')"><i class="fa-solid fa-arrows-rotate"></i> Restart App</button>
         `;
       } else {
-        actionsHtml = `<button class="restart-btn" onclick="triggerDeviceAction(${device.id}, 'restart-app')"><i class="fa-solid fa-arrows-rotate"></i> Restart App</button>`;
+        mainAction = `<button class="restart-btn" onclick="triggerDeviceAction(${device.id}, 'restart-app')"><i class="fa-solid fa-arrows-rotate"></i> Restart App</button>`;
       }
+      actionsHtml = `
+        ${mainAction}
+        <button onclick="manuallySuspendDevice(${device.id})" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.25);"><i class="fa-solid fa-ban"></i> Suspend</button>
+      `;
+    } else if (device.status === 'Offline') {
+      actionsHtml = `
+        <button onclick="triggerDeviceAction(${device.id}, 'ping-test')"><i class="fa-solid fa-terminal"></i> Ping Test</button>
+        <button onclick="manuallySuspendDevice(${device.id})" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.25);"><i class="fa-solid fa-ban"></i> Suspend</button>
+      `;
     } else {
       actionsHtml = `<button onclick="triggerDeviceAction(${device.id}, 'ping-test')"><i class="fa-solid fa-terminal"></i> Ping Test</button>`;
     }
@@ -903,8 +919,8 @@ function renderTable() {
     const typeInfo = typeIcons[device.equipment_type] || { icon: 'fa-microchip', color: '#94a3b8' };
     const typeBadge = `<span style="font-size:10px; color:${typeInfo.color};"><i class="fa-solid ${typeInfo.icon}"></i> ${device.equipment_type || 'FIDS'}</span>`;
 
-    const latencyVal = device.status !== 'Offline' && device.latency_ms !== null ? `${device.latency_ms} ms` : '-';
-    const latencyColor = device.status === 'Offline' ? 'var(--text-muted)' : (device.latency_ms < 50 ? '#10b981' : (device.latency_ms < 150 ? '#fbbf24' : '#ef4444'));
+    const latencyVal = !isActuallySuspended && device.status !== 'Offline' && device.latency_ms !== null ? `${device.latency_ms} ms` : '-';
+    const latencyColor = isActuallySuspended || device.status === 'Offline' ? 'var(--text-muted)' : (device.latency_ms < 50 ? '#10b981' : (device.latency_ms < 150 ? '#fbbf24' : '#ef4444'));
     const latencyBadge = `<span style="font-weight:600; color:${latencyColor};">${latencyVal}</span>`;
 
     row.innerHTML = `
@@ -1005,6 +1021,49 @@ function updateChartData() {
   statusChart.data.datasets[0].data = [online, offline, anomaly];
   statusChart.update();
 }
+
+function isDeviceSuspended(device) {
+  if (device.status !== 'Offline') return false;
+  if (!device.offline_since) return false;
+  const elapsedMs = Date.now() - new Date(device.offline_since).getTime();
+  return elapsedMs > 10 * 60 * 1000;
+}
+window.isDeviceSuspended = isDeviceSuspended;
+
+async function manuallySuspendDevice(deviceId) {
+  if (!confirm('Are you sure you want to suspend background monitoring for this device?')) return;
+  try {
+    const res = await fetch('/api/suspend-device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId })
+    });
+    const result = await res.json();
+    if (!result.success) {
+      alert(`Failed to suspend device: ${result.error}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+}
+window.manuallySuspendDevice = manuallySuspendDevice;
+
+async function manuallyReactivateDevice(deviceId) {
+  try {
+    const res = await fetch('/api/resume-device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId })
+    });
+    const result = await res.json();
+    if (!result.success) {
+      alert(`Failed to resume device: ${result.error}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+}
+window.manuallyReactivateDevice = manuallyReactivateDevice;
 
 // Trigger control commands via API
 async function triggerDeviceAction(deviceId, endpoint) {
@@ -2053,7 +2112,7 @@ function renderPriorityIncidents() {
   if (!container || !listBody) return;
 
   // Filter devices to get all Offline and Anomalous ones
-  const incidents = devices.filter(d => d.status === 'Offline' || d.status === 'Anomaly');
+  const incidents = devices.filter(d => (d.status === 'Offline' || d.status === 'Anomaly') && !isDeviceSuspended(d) && d.health_status_detail !== 'Suspended (Manual)');
   
   if (incidents.length === 0) {
     container.style.display = 'none';
@@ -2110,6 +2169,13 @@ function renderPriorityIncidents() {
       optBtn = `<button onclick="triggerDeviceAction(${device.id}, 'ping-test')" style="background: rgba(255,255,255,0.05); color:#fff; padding: 4px 8px; font-size:10px; border-radius:4px; border:none; cursor:pointer;"><i class="fa-solid fa-terminal"></i> Ping</button>`;
     }
 
+    const operationsCellHtml = `
+      <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+        ${optBtn}
+        <button onclick="manuallySuspendDevice(${device.id})" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; padding: 4px 8px; font-size: 10px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.25); cursor: pointer;"><i class="fa-solid fa-ban"></i> Suspend</button>
+      </div>
+    `;
+
     tr.innerHTML = `
       <td style="padding: 10px 8px;"><strong>${device.name}</strong></td>
       <td style="padding: 10px 8px; font-family: monospace; font-size: 11px;">${device.ip_address}</td>
@@ -2117,7 +2183,7 @@ function renderPriorityIncidents() {
       <td style="padding: 10px 8px;"><span class="table-tag" style="font-size: 10px;">${terminalLabel(device.terminal)}</span></td>
       <td style="padding: 10px 8px; font-size: 11px;">${device.location}</td>
       <td style="padding: 10px 8px;">${statusDesc}</td>
-      <td style="padding: 10px 8px; text-align: right;">${optBtn}</td>
+      <td style="padding: 10px 8px; text-align: right;">${operationsCellHtml}</td>
     `;
     listBody.appendChild(tr);
   });
@@ -2186,6 +2252,28 @@ function saveSchedulerConfig() {
   .catch(err => alert(`Failed to save configurations: ${err.message}`));
 }
 window.saveSchedulerConfig = saveSchedulerConfig;
+
+async function clearStatusLogs() {
+  if (!confirm("Are you sure you want to clear all logs older than 3 days and delete temporary dump files?")) return;
+  try {
+    const res = await fetch('/api/admin/clear-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert("System maintenance completed: Logs older than 3 days cleared and dump files deleted.");
+      if (typeof fetchAllLogs === 'function') {
+        fetchAllLogs();
+      }
+    } else {
+      alert("Maintenance failed: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+window.clearStatusLogs = clearStatusLogs;
 
 function startPerformanceMonitorPolling() {
   if (perfPollInterval) clearInterval(perfPollInterval);

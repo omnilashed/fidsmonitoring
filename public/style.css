@@ -476,6 +476,7 @@ body {
 .device-card.online::before { background-color: #10b981; }
 .device-card.offline::before { background-color: #ef4444; }
 .device-card.anomaly::before { background-color: #fbbf24; }
+.device-card.suspended::before { background-color: #6b7280; }
 
 .card-top {
   display: flex;
@@ -505,6 +506,7 @@ body {
 .status-indicator.online { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .status-indicator.offline { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 .status-indicator.anomaly { background: rgba(251, 191, 36, 0.15); color: #fde047; }
+.status-indicator.suspended { background: rgba(107, 114, 128, 0.15); color: #9ca3af; }
 
 .card-details {
   display: flex;
@@ -640,6 +642,7 @@ body {
 .status-icon.online { color: #10b981; }
 .status-icon.offline { color: #ef4444; }
 .status-icon.anomaly { color: #fbbf24; }
+.status-icon.suspended { color: #6b7280; }
 
 .node-label {
   position: absolute;
