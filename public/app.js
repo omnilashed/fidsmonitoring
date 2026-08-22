@@ -10,14 +10,159 @@ let statusChart = null;
 let isMuted = false;
 let offlineAlarmEnabled = true;
 let perfPollInterval = null; // Server Performance Metrics polling interval
+let ipClusters = []; // IP Clusters list state
 
-// Equipment type group definitions
+// Equipment type group definitions (mutable)
 const EQUIPMENT_GROUPS = {
   'FIDS':        ['Server FIDS', 'FIDS'],
   'IP PABX':     ['IP PABX'],
   'CCTV':        ['Server CCTV', 'CCTV'],
   'Fire Alarm':  ['Server Fire Alarm System', 'Fire Alarm System']
 };
+
+function ipToInt(ipStr) {
+  if (!ipStr || typeof ipStr !== 'string') return 0;
+  const parts = ipStr.trim().split('.');
+  if (parts.length !== 4) return 0;
+  return parts.reduce((acc, octet) => ((acc << 8) + parseInt(octet, 10)) >>> 0, 0);
+}
+
+function findMatchingIpCluster(ipStr) {
+  if (!ipStr || !ipClusters || !ipClusters.length) return null;
+  const targetIpInt = ipToInt(ipStr);
+  if (!targetIpInt) return null;
+
+  for (const cluster of ipClusters) {
+    const isActive = cluster.is_active === 1 || cluster.is_active === '1' || cluster.is_active === true;
+    if (!isActive) continue;
+    const startInt = ipToInt(cluster.ip_start);
+    const endInt = ipToInt(cluster.ip_end);
+    if (startInt && endInt && targetIpInt >= startInt && targetIpInt <= endInt) {
+      return cluster;
+    }
+  }
+  return null;
+}
+
+function getStandardTabKey(eqType) {
+  if (!eqType || typeof eqType !== 'string') return null;
+  const s = eqType.toLowerCase().trim();
+  if (s.includes('fids')) return 'FIDS';
+  if (s.includes('cctv')) return 'CCTV';
+  if (s.includes('pabx')) return 'IP PABX';
+  if (s.includes('fire') || s.includes('alarm') || s.includes('fas')) return 'Fire Alarm';
+  return null;
+}
+
+function updateEquipmentGroupsFromClusters() {
+  // Reset standard groups
+  EQUIPMENT_GROUPS['FIDS'] = ['Server FIDS', 'FIDS'];
+  EQUIPMENT_GROUPS['IP PABX'] = ['IP PABX'];
+  EQUIPMENT_GROUPS['CCTV'] = ['Server CCTV', 'CCTV'];
+  EQUIPMENT_GROUPS['Fire Alarm'] = ['Server Fire Alarm System', 'Fire Alarm System'];
+
+  // Remove any stale dynamic keys matching standard tab categories
+  Object.keys(EQUIPMENT_GROUPS).forEach(k => {
+    if (!['FIDS', 'IP PABX', 'CCTV', 'Fire Alarm'].includes(k) && getStandardTabKey(k)) {
+      delete EQUIPMENT_GROUPS[k];
+    }
+  });
+
+  const processEqType = (eqType) => {
+    if (!eqType) return;
+    const stdKey = getStandardTabKey(eqType);
+    if (stdKey) {
+      if (!EQUIPMENT_GROUPS[stdKey].includes(eqType)) {
+        EQUIPMENT_GROUPS[stdKey].push(eqType);
+      }
+    } else {
+      if (!EQUIPMENT_GROUPS[eqType]) {
+        EQUIPMENT_GROUPS[eqType] = [eqType];
+      }
+    }
+  };
+
+  if (ipClusters) {
+    ipClusters.forEach(cl => processEqType(cl.equipment_type));
+  }
+
+  if (devices) {
+    devices.forEach(d => processEqType(d.equipment_type));
+  }
+
+  renderDynamicNavTabs();
+  updateFormEquipmentTypes();
+}
+
+function renderDynamicNavTabs() {
+  const container = document.getElementById('nav-tabs-container');
+  if (!container) return;
+
+  const defaultTabs = [
+    { key: 'overview', name: 'All Systems Overview', icon: 'fa-chart-pie', color: '#38bdf8' },
+    { key: 'FIDS', name: 'FIDS Monitors', icon: 'fa-tv', color: '#3b82f6' },
+    { key: 'IP PABX', name: 'PABX Telephony', icon: 'fa-phone-volume', color: '#a855f7' },
+    { key: 'CCTV', name: 'CCTV Surveillance', icon: 'fa-video', color: '#06b6d4' },
+    { key: 'Fire Alarm', name: 'Fire Alarm Systems', icon: 'fa-fire-extinguisher', color: '#ef4444' }
+  ];
+
+  const customTabKeys = Object.keys(EQUIPMENT_GROUPS).filter(k => !['FIDS', 'IP PABX', 'CCTV', 'Fire Alarm'].includes(k));
+
+  let html = defaultTabs.map(t => {
+    const activeClass = currentTab === t.key ? 'active' : '';
+    const styleStr = currentTab === t.key 
+      ? 'background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1);' 
+      : 'background: transparent; color: var(--text-muted); border: 1px solid transparent;';
+    return `<button class="nav-tab ${activeClass}" data-tab="${t.key}" onclick="switchDashboardTab('${t.key}')" style="${styleStr} padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid ${t.icon}" style="color: ${t.color};"></i> ${t.name}</button>`;
+  }).join('');
+
+  customTabKeys.forEach(key => {
+    const activeClass = currentTab === key ? 'active' : '';
+    const styleStr = currentTab === key 
+      ? 'background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);' 
+      : 'background: transparent; color: var(--text-muted); border: 1px solid transparent;';
+    html += `<button class="nav-tab ${activeClass}" data-tab="${key}" onclick="switchDashboardTab('${key}')" style="${styleStr} padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-network-wired" style="color: #a855f7;"></i> ${key}</button>`;
+  });
+
+  const sysTabs = [
+    { key: 'Ping Manager', name: 'Ping Manager', icon: 'fa-gears', color: '#f59e0b' },
+    { key: 'Analytics', name: 'Analytics & Uptime', icon: 'fa-chart-line', color: '#ec4899' }
+  ];
+
+  sysTabs.forEach(t => {
+    const activeClass = currentTab === t.key ? 'active' : '';
+    const styleStr = currentTab === t.key 
+      ? 'background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1);' 
+      : 'background: transparent; color: var(--text-muted); border: 1px solid transparent;';
+    html += `<button class="nav-tab ${activeClass}" data-tab="${t.key}" onclick="switchDashboardTab('${t.key}')" style="${styleStr} padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid ${t.icon}" style="color: ${t.color};"></i> ${t.name}</button>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function updateFormEquipmentTypes() {
+  const selectEl = document.getElementById('device-equipment-type');
+  const dataListEl = document.getElementById('equipment-type-datalist');
+  if (!selectEl) return;
+
+  const typeSet = new Set([
+    'Server FIDS', 'FIDS', 'IP PABX', 'Server CCTV', 'CCTV', 'Server Fire Alarm System', 'Fire Alarm System'
+  ]);
+
+  if (ipClusters) {
+    ipClusters.forEach(cl => { if (cl.equipment_type) typeSet.add(cl.equipment_type); });
+  }
+
+  const currentVal = selectEl.value;
+  selectEl.innerHTML = Array.from(typeSet).map(t => `<option value="${t}">${t}</option>`).join('');
+  if (currentVal && typeSet.has(currentVal)) {
+    selectEl.value = currentVal;
+  }
+
+  if (dataListEl) {
+    dataListEl.innerHTML = Array.from(typeSet).map(t => `<option value="${t}">`).join('');
+  }
+}
 
 // Terminal zone display names (T1 / T2 / T3 → human-readable label)
 const TERMINAL_NAMES = {
@@ -274,10 +419,21 @@ function initWebSocket() {
         }
       }
 
+      if (data.clusters) {
+        ipClusters = data.clusters;
+        updateEquipmentGroupsFromClusters();
+        renderIpClustersTable();
+      }
+
       renderDashboard();
       if (document.getElementById('admin-modal').classList.contains('active')) {
         renderAdminDevices();
       }
+    } else if (data.type === 'IP_CLUSTERS_UPDATED') {
+      ipClusters = data.clusters || [];
+      updateEquipmentGroupsFromClusters();
+      renderIpClustersTable();
+      renderDashboard();
     } else if (data.type === 'CONFIG_UPDATED') {
       if (data.config.offlineAlarmEnabled !== undefined) {
         offlineAlarmEnabled = data.config.offlineAlarmEnabled === true || data.config.offlineAlarmEnabled === 'true';
@@ -601,6 +757,8 @@ function renderGrid() {
       matchStatus = d.status === 'Offline' && !isSusp;
     } else if (currentStatusFilter === 'Anomaly') {
       matchStatus = d.status === 'Anomaly';
+    } else if (currentStatusFilter === 'Isolated') {
+      matchStatus = d.health_status_detail === 'Isolated (Low Ping)';
     } else if (currentStatusFilter === 'Suspended') {
       matchStatus = isSusp;
     } else if (currentStatusFilter === 'Suspended-Rusak') {
@@ -611,6 +769,21 @@ function renderGrid() {
 
     return matchTerminal && matchEquipment && matchStatus;
   });
+
+  // Sort by latency if selected
+  if (currentLatencySort === 'LATENCY_DESC') {
+    filtered.sort((a, b) => {
+      const latA = (a.status === 'Online' && a.latency_ms !== null) ? parseFloat(a.latency_ms) : -1;
+      const latB = (b.status === 'Online' && b.latency_ms !== null) ? parseFloat(b.latency_ms) : -1;
+      return latB - latA;
+    });
+  } else if (currentLatencySort === 'LATENCY_ASC') {
+    filtered.sort((a, b) => {
+      const latA = (a.status === 'Online' && a.latency_ms !== null) ? parseFloat(a.latency_ms) : 999999;
+      const latB = (b.status === 'Online' && b.latency_ms !== null) ? parseFloat(b.latency_ms) : 999999;
+      return latA - latB;
+    });
+  }
 
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / gridItemsPerPage) || 1;
@@ -648,6 +821,9 @@ function renderGrid() {
         suspendType = 'Manual';
         statusLabel = 'Offline (Suspended)';
       }
+    } else if (device.health_status_detail === 'Isolated (Low Ping)') {
+      suspendType = 'Isolated';
+      statusLabel = 'Offline (Isolated - 30m+)';
     } else if (device.status === 'Online' && device.health_status_detail) {
       statusLabel = `Online (${device.health_status_detail})`;
     }
@@ -659,6 +835,7 @@ function renderGrid() {
     } else if (isActuallySuspended) {
       if (suspendType === 'Rusak') cardClass = 'suspended-rusak';
       else if (suspendType === 'Maintenance') cardClass = 'suspended-maintenance';
+      else if (suspendType === 'Isolated') cardClass = 'isolated';
       else cardClass = 'suspended';
     }
 
@@ -672,6 +849,8 @@ function renderGrid() {
         statusBadge = `<span class="status-indicator suspended-rusak"><i class="fa-solid fa-triangle-exclamation"></i> ${statusLabel}</span>`;
       } else if (suspendType === 'Maintenance') {
         statusBadge = `<span class="status-indicator suspended-maintenance"><i class="fa-solid fa-screwdriver-wrench"></i> ${statusLabel}</span>`;
+      } else if (suspendType === 'Isolated') {
+        statusBadge = `<span class="status-indicator isolated"><i class="fa-solid fa-shield-halved"></i> ${statusLabel}</span>`;
       } else {
         statusBadge = `<span class="status-indicator suspended">${statusLabel}</span>`;
       }
@@ -896,6 +1075,8 @@ function renderTable() {
       matchesStatus = device.status === 'Offline' && !isSusp;
     } else if (currentStatusFilter === 'Anomaly') {
       matchesStatus = device.status === 'Anomaly';
+    } else if (currentStatusFilter === 'Isolated') {
+      matchesStatus = device.health_status_detail === 'Isolated (Low Ping)';
     } else if (currentStatusFilter === 'Suspended') {
       matchesStatus = isSusp;
     } else if (currentStatusFilter === 'Suspended-Rusak') {
@@ -906,6 +1087,21 @@ function renderTable() {
 
     return matchesTerminal && matchesEquipment && matchesSearch && matchesStatus;
   });
+
+  // Sort by latency if selected
+  if (currentLatencySort === 'LATENCY_DESC') {
+    filtered.sort((a, b) => {
+      const latA = (a.status === 'Online' && a.latency_ms !== null) ? parseFloat(a.latency_ms) : -1;
+      const latB = (b.status === 'Online' && b.latency_ms !== null) ? parseFloat(b.latency_ms) : -1;
+      return latB - latA;
+    });
+  } else if (currentLatencySort === 'LATENCY_ASC') {
+    filtered.sort((a, b) => {
+      const latA = (a.status === 'Online' && a.latency_ms !== null) ? parseFloat(a.latency_ms) : 999999;
+      const latB = (b.status === 'Online' && b.latency_ms !== null) ? parseFloat(b.latency_ms) : 999999;
+      return latA - latB;
+    });
+  }
   
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / tableItemsPerPage) || 1;
@@ -947,6 +1143,9 @@ function renderTable() {
         suspendType = 'Manual';
         statusLabel = 'Offline (Suspended)';
       }
+    } else if (device.health_status_detail === 'Isolated (Low Ping)') {
+      suspendType = 'Isolated';
+      statusLabel = 'Offline (Isolated - 30m+)';
     } else if (device.health_status_detail) {
       statusLabel = `Online (${device.health_status_detail})`;
     }
@@ -961,6 +1160,8 @@ function renderTable() {
         statusText = `<span style="color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> Offline (Suspended - Rusak)</span>`;
       } else if (suspendType === 'Maintenance') {
         statusText = `<span style="color: #fbbf24;"><i class="fa-solid fa-screwdriver-wrench"></i> Offline (Suspended - Maintenance)</span>`;
+      } else if (suspendType === 'Isolated') {
+        statusText = `<span style="color: #c084fc;"><i class="fa-solid fa-shield-halved"></i> Offline (Isolated - 30m+)</span>`;
       } else {
         statusText = `<span style="color: #9ca3af;"><i class="fa-solid fa-ban"></i> Offline (Suspended)</span>`;
       }
@@ -1140,7 +1341,7 @@ function isDeviceSuspended(device) {
   if (device.health_status_detail && device.health_status_detail.startsWith('Suspended')) return true;
   if (!device.offline_since) return false;
   const elapsedMs = Date.now() - new Date(device.offline_since).getTime();
-  return elapsedMs > 10 * 60 * 1000;
+  return elapsedMs > 2 * 60 * 60 * 1000;
 }
 window.isDeviceSuspended = isDeviceSuspended;
 
@@ -2279,6 +2480,16 @@ window.downloadRdpConfig = downloadRdpConfig;
 // ─── AUTHENTICATION AND SESSION MANAGEMENT ─────────────────────────────────────
 let currentUser = null;
 
+function getCurrentUser() {
+  try {
+    if (currentUser) return currentUser;
+    const stored = sessionStorage.getItem('currentUser');
+    if (stored) return JSON.parse(stored);
+  } catch (e) {}
+  return null;
+}
+window.getCurrentUser = getCurrentUser;
+
 function handleLoginSubmit(event) {
   event.preventDefault();
   const usernameEl = document.getElementById('login-username');
@@ -2708,21 +2919,25 @@ async function loadDeviceAnalytics() {
   const selectEl = document.getElementById('analytics-device-select');
   if (!selectEl || !selectEl.value) return;
 
+  const dateInput = document.getElementById('analytics-date-filter');
+  const dateVal = dateInput ? dateInput.value : '';
+  const dateQuery = dateVal ? `?date=${encodeURIComponent(dateVal)}` : '';
+
   const selectVal = selectEl.value;
   let metricsUrl = '';
   let historyUrl = '';
 
   if (selectVal === 'overall') {
-    metricsUrl = '/api/analytics/overall';
-    historyUrl = '/api/analytics/overall/history';
+    metricsUrl = '/api/analytics/overall' + dateQuery;
+    historyUrl = '/api/analytics/overall/history' + dateQuery;
   } else if (selectVal.startsWith('category:')) {
     const cat = selectVal.split(':')[1];
-    metricsUrl = `/api/analytics/category/${encodeURIComponent(cat)}`;
-    historyUrl = `/api/analytics/category/${encodeURIComponent(cat)}/history`;
+    metricsUrl = `/api/analytics/category/${encodeURIComponent(cat)}` + dateQuery;
+    historyUrl = `/api/analytics/category/${encodeURIComponent(cat)}/history` + dateQuery;
   } else {
     const deviceId = selectVal.startsWith('device:') ? selectVal.split(':')[1] : selectVal;
-    metricsUrl = `/api/devices/${deviceId}/analytics`;
-    historyUrl = `/api/devices/${deviceId}/uptime-history`;
+    metricsUrl = `/api/devices/${deviceId}/analytics` + dateQuery;
+    historyUrl = `/api/devices/${deviceId}/uptime-history` + dateQuery;
   }
 
   try {
@@ -2922,5 +3137,470 @@ function renderAnalyticsTrendChart(historyData) {
 
 window.initializeAnalyticsTab = initializeAnalyticsTab;
 window.loadDeviceAnalytics = loadDeviceAnalytics;
+
+let currentLatencySort = 'DEFAULT';
+
+function onLatencySortChange() {
+  const filterEl = document.getElementById('latency-sort-filter');
+  currentLatencySort = filterEl ? filterEl.value : 'DEFAULT';
+  renderDashboard();
+}
+window.onLatencySortChange = onLatencySortChange;
+
+function clearAnalyticsDateFilter() {
+  const dateInput = document.getElementById('analytics-date-filter');
+  if (dateInput) dateInput.value = '';
+  loadDeviceAnalytics();
+}
+window.clearAnalyticsDateFilter = clearAnalyticsDateFilter;
+
+function openPdfExportModal() {
+  const modal = document.getElementById('pdf-export-modal');
+  if (modal) modal.classList.add('active');
+}
+window.openPdfExportModal = openPdfExportModal;
+
+function closePdfExportModal() {
+  const modal = document.getElementById('pdf-export-modal');
+  if (modal) modal.classList.remove('active');
+}
+window.closePdfExportModal = closePdfExportModal;
+
+function togglePdfPeriodInputs() {
+  const radio = document.querySelector('input[name="pdf-period-type"]:checked');
+  const periodType = radio ? radio.value : 'today';
+  const dateContainer = document.getElementById('pdf-date-input-container');
+  const monthContainer = document.getElementById('pdf-month-input-container');
+
+  if (dateContainer) dateContainer.style.display = periodType === 'select-date' ? 'flex' : 'none';
+  if (monthContainer) monthContainer.style.display = periodType === 'monthly' ? 'flex' : 'none';
+}
+window.togglePdfPeriodInputs = togglePdfPeriodInputs;
+
+async function generateAnalyticsPdfReport() {
+  const radio = document.querySelector('input[name="pdf-period-type"]:checked');
+  const periodType = radio ? radio.value : 'today';
+  const scopeVal = document.getElementById('pdf-scope-select').value;
+  
+  let periodLabel = 'Today';
+  let dateQueryStr = '';
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  if (periodType === 'today') {
+    periodLabel = `Hari Ini (${todayStr})`;
+    dateQueryStr = `?date=${todayStr}`;
+  } else if (periodType === 'select-date') {
+    const selDate = document.getElementById('pdf-select-date').value;
+    if (!selDate) {
+      alert('Silakan pilih tanggal laporan terlebih dahulu');
+      return;
+    }
+    periodLabel = `Tanggal: ${selDate}`;
+    dateQueryStr = `?date=${selDate}`;
+  } else if (periodType === 'monthly') {
+    const selMonth = document.getElementById('pdf-select-month').value;
+    if (!selMonth) {
+      alert('Silakan pilih bulan & tahun laporan terlebih dahulu');
+      return;
+    }
+    periodLabel = `Bulan: ${selMonth}`;
+    dateQueryStr = `?month=${selMonth}`;
+  }
+
+  closePdfExportModal();
+
+  let metricsUrl = '/api/analytics/overall' + dateQueryStr;
+  let historyUrl = '/api/analytics/overall/history' + dateQueryStr;
+  let scopeTitle = 'Semua Fasilitas & Sistem (Overall)';
+
+  if (scopeVal.startsWith('cat-')) {
+    const cat = scopeVal.split('-')[1];
+    scopeTitle = `Kategori: ${cat}`;
+    metricsUrl = `/api/analytics/category/${encodeURIComponent(cat)}` + dateQueryStr;
+    historyUrl = `/api/analytics/category/${encodeURIComponent(cat)}/history` + dateQueryStr;
+  }
+
+  try {
+    const [metricsRes, historyRes] = await Promise.all([
+      fetch(metricsUrl),
+      fetch(historyUrl)
+    ]);
+    const metrics = await metricsRes.json();
+    const history = await historyRes.json();
+
+    const reportWindow = window.open('', '_blank', 'width=920,height=850');
+    if (!reportWindow) {
+      alert('Popup blocker menghalangi pembukaan laporan. Izinkan popup di browser Anda untuk mengunduh laporan PDF.');
+      return;
+    }
+
+    const filteredDevices = scopeVal.startsWith('cat-') 
+      ? devices.filter(d => d.equipment_type === scopeVal.split('-')[1])
+      : devices;
+
+    const reportHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>NOC Performance & Availability Report - ${periodLabel}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 30px; margin: 0; background: #fff; line-height: 1.4; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #0284c7; padding-bottom: 15px; margin-bottom: 20px; }
+          .header h1 { margin: 0; font-size: 20px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
+          .header p { margin: 4px 0 0 0; font-size: 12px; color: #64748b; }
+          .badge-noc { background: #0284c7; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+          
+          .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px; }
+          .kpi-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; text-align: center; background: #f8fafc; }
+          .kpi-title { font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; letter-spacing: 0.5px; }
+          .kpi-value { font-size: 20px; font-weight: bold; color: #0f172a; }
+          
+          .section-title { font-size: 14px; font-weight: bold; margin: 24px 0 10px 0; color: #0f172a; border-left: 4px solid #ec4899; padding-left: 8px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+          th, td { border: 1px solid #cbd5e1; padding: 7px 10px; text-align: left; }
+          th { background: #f1f5f9; color: #334155; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+          tr:nth-child(even) { background: #f8fafc; }
+
+          .status-tag { font-weight: bold; padding: 2px 6px; border-radius: 3px; font-size: 10px; display: inline-block; }
+          .status-online { background: #dcfce7; color: #166534; }
+          .status-offline { background: #fee2e2; color: #991b1b; }
+          .status-anomaly { background: #fef3c7; color: #92400e; }
+          .status-suspended { background: #f1f5f9; color: #475569; }
+
+          .footer { margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="margin-bottom: 15px; text-align: right;">
+          <button onclick="window.print()" style="padding: 8px 18px; background: #0284c7; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;">🖨️ Cetak / Simpan ke PDF</button>
+        </div>
+
+        <div class="header">
+          <div>
+            <h1>Airport NOC Performance & Availability Report</h1>
+            <p>Ruang Lingkup: <strong>${scopeTitle}</strong> | Periode: <strong>${periodLabel}</strong></p>
+          </div>
+          <div style="text-align: right;">
+            <span class="badge-noc">FIDS MONITORING SYSTEM</span>
+            <p style="font-size: 10px; margin-top: 4px; color: #64748b;">Tanggal Cetak: ${new Date().toLocaleString('id-ID')}</p>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-title">Operational Availability</div>
+            <div class="kpi-value" style="color: ${metrics.availability >= 99.9 ? '#166534' : '#d97706'};">${metrics.availability ? metrics.availability.toFixed(4) : '100.0000'}%</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">MTBF (Mean Time Between Failure)</div>
+            <div class="kpi-value" style="font-size: 16px;">${formatDurationSecs(metrics.mtbf || 86400)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">MTTR (Mean Time To Repair)</div>
+            <div class="kpi-value" style="font-size: 16px;">${formatDurationSecs(metrics.mttr || 0)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">Facility Health Category</div>
+            <div class="kpi-value" style="font-size: 16px; color: ${metrics.category === 'Excellent' ? '#166534' : '#d97706'};">${metrics.category ? metrics.category.toUpperCase() : 'EXCELLENT'}</div>
+          </div>
+        </div>
+
+        <div class="section-title">Histori Ketersediaan & Downtime Log (${history.length} Catatan)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>Jumlah Insiden</th>
+              <th>Total Downtime (Detik)</th>
+              <th>SLA Availability %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${history.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#64748b;">Tidak ada data log histori untuk periode ini.</td></tr>' : history.map(r => `
+              <tr>
+                <td><strong>${r.date}</strong></td>
+                <td>${r.incident_count || 0} Insiden</td>
+                <td>${r.downtime_seconds || 0} Detik</td>
+                <td style="font-weight: bold; color: ${r.uptime_pct >= 99.9 ? '#166534' : '#d97706'};">${parseFloat(r.uptime_pct).toFixed(4)}%</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="section-title">Daftar Perangkat & Latensi Jarak Jauh (${filteredDevices.length} Devices)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nama Perangkat</th>
+              <th>Alamat IP</th>
+              <th>Terminal</th>
+              <th>Tipe Peralatan</th>
+              <th>Status Operasional</th>
+              <th>Latency Ping</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredDevices.map(d => {
+              let stClass = 'status-online';
+              let stText = d.status;
+              if (d.status === 'Offline') stClass = 'status-offline';
+              else if (d.status === 'Anomaly') stClass = 'status-anomaly';
+              if (d.health_status_detail && d.health_status_detail.startsWith('Suspended')) {
+                stClass = 'status-suspended';
+                stText = `Offline (${d.health_status_detail})`;
+              }
+              return `
+                <tr>
+                  <td>#${d.id}</td>
+                  <td><strong>${d.name}</strong></td>
+                  <td><code>${d.ip_address}</code></td>
+                  <td>${d.terminal}</td>
+                  <td>${d.equipment_type}</td>
+                  <td><span class="status-tag ${stClass}">${stText}</span></td>
+                  <td>${d.latency_ms !== null ? d.latency_ms + ' ms' : '-'}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <span>Airport Network Operations Center (NOC) — FIDS Infrastructure System</span>
+          <span>Halaman Laporan Resmi — Rahasia / Dokumen Internal</span>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 600);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    reportWindow.document.open();
+    reportWindow.document.write(reportHtml);
+    reportWindow.document.close();
+
+  } catch (err) {
+    alert(`Gagal generate laporan PDF: ${err.message}`);
+  }
+}
+window.generateAnalyticsPdfReport = generateAnalyticsPdfReport;
+
+function onDeviceIpInput(val) {
+  const hintEl = document.getElementById('ip-cluster-hint');
+  const typeSelect = document.getElementById('device-equipment-type');
+  if (!hintEl) return;
+
+  if (!val || val.trim().length < 7) {
+    hintEl.innerHTML = '';
+    return;
+  }
+
+  const matched = findMatchingIpCluster(val.trim());
+  if (matched) {
+    hintEl.innerHTML = `<span style="color: #34d399; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Matched Cluster: ${matched.name} (${matched.equipment_type})</span>`;
+    if (typeSelect) {
+      for (let i = 0; i < typeSelect.options.length; i++) {
+        if (typeSelect.options[i].value === matched.equipment_type) {
+          typeSelect.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  } else {
+    hintEl.innerHTML = `<span style="color: #fbbf24;"><i class="fa-solid fa-triangle-exclamation"></i> IP di luar cluster terdaftar (Restriksi ping dapat diatur di Ping Manager)</span>`;
+  }
+}
+window.onDeviceIpInput = onDeviceIpInput;
+
+function renderIpClustersTable() {
+  const tbody = document.getElementById('ip-clusters-table-body');
+  if (!tbody) return;
+
+  if (!ipClusters || ipClusters.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px; color: var(--text-muted);">Belum ada Cluster IP yang terdaftar. Klik "+ Add New IP Cluster" untuk menambahkan.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = ipClusters.map(cl => {
+    const isActive = cl.is_active === 1 || cl.is_active === '1' || cl.is_active === true;
+    const statusTag = isActive
+      ? `<span class="table-tag text-green"><i class="fa-solid fa-circle-check"></i> Aktif (Allowed)</span>`
+      : `<span class="table-tag text-red"><i class="fa-solid fa-ban"></i> Nonaktif (Restricted)</span>`;
+
+    return `
+      <tr>
+        <td>#${cl.id}</td>
+        <td><strong>${cl.name}</strong></td>
+        <td><span class="table-tag text-purple">${cl.equipment_type}</span></td>
+        <td><code style="color:#38bdf8;">${cl.ip_start} – ${cl.ip_end}</code></td>
+        <td>${statusTag}</td>
+        <td style="color: var(--text-muted);">${cl.description || '-'}</td>
+        <td style="text-align: center;">
+          <button onclick="editIpCluster(${cl.id})" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); cursor: pointer; margin-right: 4px;"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+          <button onclick="deleteIpCluster(${cl.id})" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); cursor: pointer;"><i class="fa-solid fa-trash"></i> Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+window.renderIpClustersTable = renderIpClustersTable;
+
+function openIpClusterModal(cluster = null) {
+  const modal = document.getElementById('ip-cluster-modal');
+  const title = document.getElementById('ip-cluster-modal-title');
+  const form = document.getElementById('ip-cluster-form');
+  if (!modal || !form) return;
+
+  form.reset();
+
+  if (cluster) {
+    title.textContent = `Edit IP Cluster #${cluster.id}`;
+    document.getElementById('cluster-id').value = cluster.id;
+    document.getElementById('cluster-name').value = cluster.name;
+    document.getElementById('cluster-equipment-type').value = cluster.equipment_type;
+    document.getElementById('cluster-ip-start').value = cluster.ip_start;
+    document.getElementById('cluster-ip-end').value = cluster.ip_end;
+    document.getElementById('cluster-description').value = cluster.description || '';
+    document.getElementById('cluster-is-active').checked = cluster.is_active === 1 || cluster.is_active === '1' || cluster.is_active === true;
+  } else {
+    title.textContent = 'Add New IP Cluster';
+    document.getElementById('cluster-id').value = '';
+    document.getElementById('cluster-is-active').checked = true;
+  }
+
+  modal.classList.add('active');
+}
+window.openIpClusterModal = openIpClusterModal;
+
+function closeIpClusterModal() {
+  const modal = document.getElementById('ip-cluster-modal');
+  if (modal) modal.classList.remove('active');
+}
+window.closeIpClusterModal = closeIpClusterModal;
+
+async function submitIpClusterForm(e) {
+  e.preventDefault();
+
+  const id = document.getElementById('cluster-id').value;
+  const name = document.getElementById('cluster-name').value;
+  const equipmentType = document.getElementById('cluster-equipment-type').value;
+  const ipStart = document.getElementById('cluster-ip-start').value;
+  const ipEnd = document.getElementById('cluster-ip-end').value;
+  const description = document.getElementById('cluster-description').value;
+  const isActive = document.getElementById('cluster-is-active').checked;
+
+  if (!name || !equipmentType || !ipStart || !ipEnd) {
+    alert('Nama Cluster, Kategori Peralatan, IP Awal, dan IP Akhir wajib diisi!');
+    return;
+  }
+
+  const user = getCurrentUser();
+  const userRole = (user && user.role) ? user.role : 'admin';
+
+  const payload = { name, equipmentType, ipStart, ipEnd, description, isActive };
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/ip-clusters/${id}` : '/api/ip-clusters';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-User-Role': userRole
+  };
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: headers,
+      body: JSON.stringify(payload)
+    });
+
+    const text = await res.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (parseErr) {
+      alert(`Server Response Error (${res.status}): ${text.substring(0, 150)}`);
+      return;
+    }
+
+    if (!res.ok || result.error) {
+      alert(`Gagal menyimpan Cluster IP: ${result.error || result.message || 'Error HTTP ' + res.status}`);
+      return;
+    }
+
+    closeIpClusterModal();
+    
+    // Refresh clusters list
+    const clustersRes = await fetch('/api/ip-clusters');
+    if (clustersRes.ok) {
+      ipClusters = await clustersRes.json();
+      updateEquipmentGroupsFromClusters();
+      renderIpClustersTable();
+    }
+
+  } catch (err) {
+    alert(`Network Error: ${err.message}`);
+  }
+}
+window.submitIpClusterForm = submitIpClusterForm;
+
+function editIpCluster(id) {
+  const cluster = ipClusters.find(c => c.id === id);
+  if (cluster) openIpClusterModal(cluster);
+}
+window.editIpCluster = editIpCluster;
+
+async function deleteIpCluster(id) {
+  const cluster = ipClusters.find(c => c.id === id);
+  const name = cluster ? cluster.name : `#${id}`;
+
+  if (!confirm(`Apakah Anda yakin ingin menghapus IP Cluster "${name}"?`)) return;
+
+  const user = getCurrentUser();
+  const userRole = (user && user.role) ? user.role : 'admin';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-User-Role': userRole
+  };
+
+  try {
+    const res = await fetch(`/api/ip-clusters/${id}`, { method: 'DELETE', headers });
+    const text = await res.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (parseErr) {
+      alert(`Server Response Error (${res.status}): ${text.substring(0, 150)}`);
+      return;
+    }
+
+    if (!res.ok || result.error) {
+      alert(`Gagal menghapus Cluster IP: ${result.error || 'Error HTTP ' + res.status}`);
+      return;
+    }
+
+    const clustersRes = await fetch('/api/ip-clusters');
+    if (clustersRes.ok) {
+      ipClusters = await clustersRes.json();
+      updateEquipmentGroupsFromClusters();
+      renderIpClustersTable();
+    }
+  } catch (err) {
+    alert(`Network Error: ${err.message}`);
+  }
+}
+window.deleteIpCluster = deleteIpCluster;
+
 
 

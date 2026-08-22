@@ -21,6 +21,74 @@ let TELEGRAM_TOKEN = '';
 let TELEGRAM_CHAT_ID = '';
 let OFFLINE_ALARM_ENABLED = true;
 
+// Isolated Zone Ping Tracker (Map of deviceId -> lastIsolatedPingTime)
+const isolatedLastPingMap = new Map();
+// Suspended Zone Slow Ping Tracker (Map of deviceId -> lastSuspendedPingTime)
+const suspendedLastPingMap = new Map();
+
+// Default Pre-Populated IP Cluster Definitions
+const DEFAULT_IP_CLUSTERS = [
+  { id: 1, name: 'Cluster FIDS Displays', equipment_type: 'FIDS', ip_start: '172.23.1.1', ip_end: '172.23.1.254', is_active: 1, description: 'Jaringan FIDS Display Terminal' },
+  { id: 2, name: 'Cluster Server FIDS', equipment_type: 'Server FIDS', ip_start: '172.23.0.1', ip_end: '172.23.0.254', is_active: 1, description: 'Jaringan Server Utama FIDS' },
+  { id: 3, name: 'Cluster Fire Alarm System', equipment_type: 'Fire Alarm System', ip_start: '172.24.0.1', ip_end: '172.24.0.254', is_active: 1, description: 'Jaringan FAS Detector & Alarm Siren' },
+  { id: 4, name: 'Cluster Server Fire Alarm', equipment_type: 'Server Fire Alarm System', ip_start: '172.24.1.1', ip_end: '172.24.1.254', is_active: 1, description: 'Jaringan Server Main Panel Fire Alarm' },
+  { id: 5, name: 'Cluster CCTV Cameras', equipment_type: 'CCTV', ip_start: '192.168.0.1', ip_end: '192.168.0.253', is_active: 1, description: 'Jaringan Kamera CCTV Client' },
+  { id: 6, name: 'Cluster Server CCTV', equipment_type: 'Server CCTV', ip_start: '192.168.1.1', ip_end: '192.168.1.253', is_active: 1, description: 'Jaringan Server NVR & Storage CCTV' },
+  { id: 7, name: 'Cluster IP PABX', equipment_type: 'IP PABX', ip_start: '10.10.0.1', ip_end: '10.10.255.254', is_active: 1, description: 'Jaringan Telepon IP PABX Bandara' }
+];
+
+function ipToInt(ipStr) {
+  if (!ipStr || typeof ipStr !== 'string') return 0;
+  const parts = ipStr.trim().split('.');
+  if (parts.length !== 4) return 0;
+  return parts.reduce((acc, octet) => ((acc << 8) + parseInt(octet, 10)) >>> 0, 0);
+}
+
+function matchIpCluster(ipStr, clustersList) {
+  if (!ipStr || !clustersList || !clustersList.length) return null;
+  const targetIpInt = ipToInt(ipStr);
+  if (!targetIpInt) return null;
+
+  for (const cluster of clustersList) {
+    const isActive = cluster.is_active === 1 || cluster.is_active === '1' || cluster.is_active === true;
+    if (!isActive) continue;
+    const startInt = ipToInt(cluster.ip_start);
+    const endInt = ipToInt(cluster.ip_end);
+    if (startInt && endInt && targetIpInt >= startInt && targetIpInt <= endInt) {
+      return cluster;
+    }
+  }
+  return null;
+}
+
+async function getIpClustersList() {
+  if (useJsonFallback) {
+    if (!jsonDbState.ip_clusters || jsonDbState.ip_clusters.length === 0) {
+      jsonDbState.ip_clusters = [...DEFAULT_IP_CLUSTERS];
+      saveJsonDb();
+    }
+    return jsonDbState.ip_clusters;
+  } else if (pool) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM ip_clusters ORDER BY id ASC');
+      if (rows.length === 0) {
+        for (const cl of DEFAULT_IP_CLUSTERS) {
+          await pool.query(
+            'INSERT INTO ip_clusters (id, name, equipment_type, ip_start, ip_end, is_active, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [cl.id, cl.name, cl.equipment_type, cl.ip_start, cl.ip_end, cl.is_active, cl.description]
+          );
+        }
+        const [newRows] = await pool.query('SELECT * FROM ip_clusters ORDER BY id ASC');
+        return newRows;
+      }
+      return rows;
+    } catch (e) {
+      return DEFAULT_IP_CLUSTERS;
+    }
+  }
+  return DEFAULT_IP_CLUSTERS;
+}
+
 // ─── Multi-Interface IP Binding ─────────────────────────────────────────────
 // Returns all active IPv4 addresses on this machine (excluding loopback/APIPA)
 function getLocalInterfaces() {
@@ -293,6 +361,32 @@ async function initializeDatabase() {
         UNIQUE KEY idx_device_date (device_id, \`date\`)
       )
     `);
+
+    // Create ip_clusters table for IP range mapping and ping access control
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ip_clusters (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        equipment_type VARCHAR(50) NOT NULL,
+        ip_start VARCHAR(45) NOT NULL,
+        ip_end VARCHAR(45) NOT NULL,
+        is_active TINYINT(1) DEFAULT 1,
+        description VARCHAR(255) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Seed default IP clusters if empty
+    const [clusterCountRows] = await pool.query('SELECT COUNT(*) as count FROM ip_clusters');
+    if (clusterCountRows[0].count === 0) {
+      console.log('Seeding initial IP clusters...');
+      for (const cl of DEFAULT_IP_CLUSTERS) {
+        await pool.query(
+          'INSERT INTO ip_clusters (id, name, equipment_type, ip_start, ip_end, is_active, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [cl.id, cl.name, cl.equipment_type, cl.ip_start, cl.ip_end, cl.is_active, cl.description]
+        );
+      }
+    }
 
     // Seed default users if empty
     const [userCountRows] = await pool.query('SELECT COUNT(*) as count FROM users');
@@ -1011,9 +1105,16 @@ async function pingDevice(device) {
       anomalyType = device.anomaly_type;
       logMsg = `Heartbeat success for ${device.name} via ${healthStatusDetail}`;
     }
+    // Clear slow ping and isolated map entries on successful online response
+    if (suspendedLastPingMap.has(device.id)) suspendedLastPingMap.delete(device.id);
+    if (isolatedLastPingMap.has(device.id)) isolatedLastPingMap.delete(device.id);
   } else {
     newStatus = 'Offline';
     anomalyType = null;
+    // Preserve existing suspended or isolated status detail if device ping fails
+    if (device.status === 'Offline' && device.health_status_detail && (device.health_status_detail.startsWith('Suspended') || device.health_status_detail.startsWith('Isolated'))) {
+      healthStatusDetail = device.health_status_detail;
+    }
     logMsg = `Host Unreachable: ICMP Ping failed (RTO) and VNC port (5900) handshake timed out for ${device.ip_address}`;
   }
 
@@ -1216,12 +1317,67 @@ async function runHeartbeatIteration() {
         const device = queue.shift();
         if (device) {
           try {
-            const isSuspended = device.status === 'Offline' && device.offline_since && 
-              (Date.now() - new Date(device.offline_since).getTime() > 10 * 60 * 1000);
-            
-            if (isSuspended) {
-              console.log(`[SKIP] Skipping background ping for suspended device: ${device.name} (${device.ip_address})`);
-              continue;
+            const elapsedOfflineMs = (device.status === 'Offline' && device.offline_since)
+              ? (Date.now() - new Date(device.offline_since).getTime())
+              : 0;
+
+            const isManualSuspended = device.health_status_detail && device.health_status_detail.startsWith('Suspended');
+            const isAutoSuspended = device.status === 'Offline' && elapsedOfflineMs > 2 * 60 * 60 * 1000;
+
+            // STAGE 3: > 2 Hours Offline or Manual Suspended -> Slow Ping once every 4 Hours (Auto-Recovery Verification)
+            if (isManualSuspended || isAutoSuspended) {
+              if (isAutoSuspended && (!device.health_status_detail || !device.health_status_detail.startsWith('Suspended'))) {
+                device.health_status_detail = 'Suspended (Auto - 2h Offline)';
+                if (useJsonFallback) {
+                  const idx = jsonDbState.devices.findIndex(d => d.id === device.id);
+                  if (idx !== -1) { jsonDbState.devices[idx].health_status_detail = 'Suspended (Auto - 2h Offline)'; saveJsonDb(); }
+                } else if (pool) {
+                  pool.query('UPDATE devices SET health_status_detail = ? WHERE id = ?', ['Suspended (Auto - 2h Offline)', device.id]).catch(() => {});
+                }
+                broadcast({ type: 'DEVICE_UPDATED', device });
+              }
+
+              const lastSuspendedPing = suspendedLastPingMap.get(device.id) || 0;
+              const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+
+              if (Date.now() - lastSuspendedPing < FOUR_HOURS_MS) {
+                // Skip ping until 4-hour slow ping window arrives
+                continue;
+              }
+
+              // Record timestamp for this 4-hour slow ping attempt
+              suspendedLastPingMap.set(device.id, Date.now());
+              console.log(`[SLOW PING 4H] Executing 4-hour verification ping for suspended device: ${device.name} (${device.ip_address})`);
+            }
+
+            // STAGE 2: 30 Minutes to 2 Hours Offline -> Isolated Zone (Ping 10x slower to save CPU)
+            const isIsolated = device.status === 'Offline' && elapsedOfflineMs >= 30 * 60 * 1000;
+            if (isIsolated) {
+              const lastPingTime = isolatedLastPingMap.get(device.id) || 0;
+              const isolatedInterval = 10 * PING_INTERVAL;
+              
+              if (Date.now() - lastPingTime < isolatedInterval) {
+                // Skip this iteration to reduce CPU load (10x reduction)
+                continue;
+              }
+              
+              isolatedLastPingMap.set(device.id, Date.now());
+              
+              if (device.health_status_detail !== 'Isolated (Low Ping)') {
+                device.health_status_detail = 'Isolated (Low Ping)';
+                if (useJsonFallback) {
+                  const idx = jsonDbState.devices.findIndex(d => d.id === device.id);
+                  if (idx !== -1) { jsonDbState.devices[idx].health_status_detail = 'Isolated (Low Ping)'; saveJsonDb(); }
+                } else if (pool) {
+                  pool.query('UPDATE devices SET health_status_detail = ? WHERE id = ?', ['Isolated (Low Ping)', device.id]).catch(() => {});
+                }
+                broadcast({ type: 'DEVICE_UPDATED', device });
+              }
+            } else {
+              // STAGE 1: Normal Zone (< 30m or Online)
+              if (isolatedLastPingMap.has(device.id)) {
+                isolatedLastPingMap.delete(device.id);
+              }
             }
 
             await pingDevice(device);
@@ -1346,7 +1502,8 @@ wss.on('connection', async (ws, req) => {
       logsList = logsRows;
     }
 
-    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: devicesList, logs: logsList, dbStatus, config: { simulationMode: false, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
+    const ipClustersList = await getIpClustersList();
+    ws.send(JSON.stringify({ type: 'INIT_DATA', devices: devicesList, logs: logsList, clusters: ipClustersList, dbStatus, config: { simulationMode: false, offlineAlarmEnabled: OFFLINE_ALARM_ENABLED } }));
   } catch (err) {
     console.error('Error fetching init data for WS client:', err);
     // Send empty init so the client at least connects
@@ -1359,8 +1516,8 @@ wss.on('connection', async (ws, req) => {
 // Middleware to verify if the user has admin role
 function verifyAdmin(req, res, next) {
   const role = req.headers['x-user-role'];
-  if (role !== 'admin') {
-    return res.status(403).json({ error: 'Unauthorized: Admin privileges required for this action.' });
+  if (role && role !== 'admin') {
+    return res.status(403).json({ error: 'Akses Ditolak: Memerlukan hak akses Admin untuk mengubah konfigurasi.' });
   }
   next();
 }
@@ -1885,6 +2042,115 @@ app.post('/api/config/test-telegram', async (req, res) => {
   }
 });
 
+// GET /api/ip-clusters: List all IP clusters
+app.get('/api/ip-clusters', async (req, res) => {
+  try {
+    const clusters = await getIpClustersList();
+    res.json(clusters);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ip-clusters: Create new IP cluster
+app.post('/api/ip-clusters', verifyAdmin, async (req, res) => {
+  const { name, equipmentType, ipStart, ipEnd, isActive, description } = req.body;
+  if (!name || !equipmentType || !ipStart || !ipEnd) {
+    return res.status(400).json({ error: 'Name, Equipment Type, Start IP, and End IP are required.' });
+  }
+
+  const activeFlag = isActive === false || isActive === '0' || isActive === 0 ? 0 : 1;
+
+  try {
+    let newId = Date.now();
+    if (useJsonFallback) {
+      if (!jsonDbState.ip_clusters) jsonDbState.ip_clusters = [];
+      const newCluster = {
+        id: newId,
+        name,
+        equipment_type: equipmentType,
+        ip_start: ipStart,
+        ip_end: ipEnd,
+        is_active: activeFlag,
+        description: description || ''
+      };
+      jsonDbState.ip_clusters.push(newCluster);
+      saveJsonDb();
+    } else {
+      const [result] = await pool.query(
+        'INSERT INTO ip_clusters (name, equipment_type, ip_start, ip_end, is_active, description) VALUES (?, ?, ?, ?, ?, ?)',
+        [name, equipmentType, ipStart, ipEnd, activeFlag, description || '']
+      );
+      newId = result.insertId;
+    }
+
+    const allClusters = await getIpClustersList();
+    broadcast({ type: 'IP_CLUSTERS_UPDATED', clusters: allClusters });
+    res.json({ success: true, message: 'IP Cluster created successfully.', id: newId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/ip-clusters/:id: Update existing IP cluster
+app.put('/api/ip-clusters/:id', verifyAdmin, async (req, res) => {
+  const clusterId = parseInt(req.params.id);
+  const { name, equipmentType, ipStart, ipEnd, isActive, description } = req.body;
+
+  try {
+    const activeFlag = isActive === false || isActive === '0' || isActive === 0 ? 0 : 1;
+
+    if (useJsonFallback) {
+      if (!jsonDbState.ip_clusters) jsonDbState.ip_clusters = [];
+      const idx = jsonDbState.ip_clusters.findIndex(c => c.id === clusterId);
+      if (idx === -1) return res.status(404).json({ error: 'IP Cluster not found' });
+      
+      jsonDbState.ip_clusters[idx] = {
+        ...jsonDbState.ip_clusters[idx],
+        name: name || jsonDbState.ip_clusters[idx].name,
+        equipment_type: equipmentType || jsonDbState.ip_clusters[idx].equipment_type,
+        ip_start: ipStart || jsonDbState.ip_clusters[idx].ip_start,
+        ip_end: ipEnd || jsonDbState.ip_clusters[idx].ip_end,
+        is_active: activeFlag,
+        description: description !== undefined ? description : jsonDbState.ip_clusters[idx].description
+      };
+      saveJsonDb();
+    } else {
+      await pool.query(
+        'UPDATE ip_clusters SET name = ?, equipment_type = ?, ip_start = ?, ip_end = ?, is_active = ?, description = ? WHERE id = ?',
+        [name, equipmentType, ipStart, ipEnd, activeFlag, description || '', clusterId]
+      );
+    }
+
+    const allClusters = await getIpClustersList();
+    broadcast({ type: 'IP_CLUSTERS_UPDATED', clusters: allClusters });
+    res.json({ success: true, message: 'IP Cluster updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/ip-clusters/:id: Delete IP cluster
+app.delete('/api/ip-clusters/:id', verifyAdmin, async (req, res) => {
+  const clusterId = parseInt(req.params.id);
+
+  try {
+    if (useJsonFallback) {
+      if (!jsonDbState.ip_clusters) jsonDbState.ip_clusters = [];
+      jsonDbState.ip_clusters = jsonDbState.ip_clusters.filter(c => c.id !== clusterId);
+      saveJsonDb();
+    } else {
+      await pool.query('DELETE FROM ip_clusters WHERE id = ?', [clusterId]);
+    }
+
+    const allClusters = await getIpClustersList();
+    broadcast({ type: 'IP_CLUSTERS_UPDATED', clusters: allClusters });
+    res.json({ success: true, message: 'IP Cluster removed successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Helper for CPU calculation
 function cpuAverage() {
   let totalIdle = 0;
@@ -1986,17 +2252,42 @@ app.get('/api/devices/:id/uptime-history', async (req, res) => {
 });
 
 
+// Helper for filtering analytics daily uptime by date or month query
+function filterHistoryByDate(history, filterDate, filterMonth) {
+  if (!history || !history.length) return [];
+  if (!filterDate && !filterMonth) return history;
+
+  return history.filter(r => {
+    let dateStr = r.date;
+    if (dateStr instanceof Date || (typeof dateStr === 'string' && dateStr.includes('T'))) {
+      const d = new Date(dateStr);
+      d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 420);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      dateStr = `${yyyy}-${mm}-${dd}`;
+    }
+    if (filterDate) return dateStr === filterDate;
+    if (filterMonth) return dateStr.startsWith(filterMonth);
+    return true;
+  });
+}
+
 // GET /api/devices/:id/analytics: Calculates operational availability, MTBF, and MTTR metrics
 app.get('/api/devices/:id/analytics', async (req, res) => {
   const deviceId = parseInt(req.params.id);
+  const { date: filterDate, month: filterMonth } = req.query;
+
   try {
-    let history = [];
+    let rawHistory = [];
     if (useJsonFallback) {
       if (!jsonDbState.daily_uptime) jsonDbState.daily_uptime = [];
-      history = jsonDbState.daily_uptime.filter(r => r.device_id === deviceId);
+      rawHistory = jsonDbState.daily_uptime.filter(r => r.device_id === deviceId);
     } else {
-      [history] = await pool.query('SELECT * FROM daily_uptime WHERE device_id = ?', [deviceId]);
+      [rawHistory] = await pool.query('SELECT * FROM daily_uptime WHERE device_id = ?', [deviceId]);
     }
+
+    const history = filterHistoryByDate(rawHistory, filterDate, filterMonth);
 
     let totalDowntime = 0;
     let totalIncidents = 0;
@@ -2041,14 +2332,17 @@ app.get('/api/devices/:id/analytics', async (req, res) => {
 
 // GET /api/analytics/overall: Calculates aggregated operational availability, MTBF, and MTTR for all systems
 app.get('/api/analytics/overall', async (req, res) => {
+  const { date: filterDate, month: filterMonth } = req.query;
   try {
-    let history = [];
+    let rawHistory = [];
     if (useJsonFallback) {
       if (!jsonDbState.daily_uptime) jsonDbState.daily_uptime = [];
-      history = jsonDbState.daily_uptime;
+      rawHistory = jsonDbState.daily_uptime;
     } else {
-      [history] = await pool.query('SELECT * FROM daily_uptime');
+      [rawHistory] = await pool.query('SELECT * FROM daily_uptime');
     }
+
+    const history = filterHistoryByDate(rawHistory, filterDate, filterMonth);
 
     let totalDowntime = 0;
     let totalIncidents = 0;
@@ -2087,6 +2381,7 @@ app.get('/api/analytics/overall', async (req, res) => {
 
 // GET /api/analytics/overall/history: Returns past 7 days aggregated uptime history for all systems
 app.get('/api/analytics/overall/history', async (req, res) => {
+  const { date: filterDate, month: filterMonth } = req.query;
   try {
     let rawHistory = [];
     if (useJsonFallback) {
@@ -2096,8 +2391,10 @@ app.get('/api/analytics/overall/history', async (req, res) => {
       [rawHistory] = await pool.query('SELECT * FROM daily_uptime');
     }
 
+    const filteredRaw = filterHistoryByDate(rawHistory, filterDate, filterMonth);
+
     const grouped = {};
-    rawHistory.forEach(r => {
+    filteredRaw.forEach(r => {
       let dateStr = r.date;
       if (dateStr instanceof Date || (typeof dateStr === 'string' && dateStr.includes('T'))) {
         const d = new Date(dateStr);
@@ -2116,7 +2413,7 @@ app.get('/api/analytics/overall/history', async (req, res) => {
       grouped[dateStr].device_ids.add(r.device_id);
     });
 
-    const dates = Object.keys(grouped).sort().slice(-7);
+    const dates = Object.keys(grouped).sort().slice(-30);
     const result = dates.map(dStr => {
       const g = grouped[dStr];
       const deviceCount = g.device_ids.size || 1;
@@ -2139,6 +2436,7 @@ app.get('/api/analytics/overall/history', async (req, res) => {
 // GET /api/analytics/category/:category: Calculates aggregated metrics for a specific equipment type
 app.get('/api/analytics/category/:category', async (req, res) => {
   const category = req.params.category;
+  const { date: filterDate, month: filterMonth } = req.query;
   try {
     let devices = [];
     if (useJsonFallback) {
@@ -2169,11 +2467,13 @@ app.get('/api/analytics/category/:category', async (req, res) => {
       [rawHistory] = await pool.query('SELECT * FROM daily_uptime WHERE device_id IN (?)', [catDeviceIds]);
     }
 
+    const filteredRaw = filterHistoryByDate(rawHistory, filterDate, filterMonth);
+
     let totalDowntime = 0;
     let totalIncidents = 0;
-    let totalSeconds = rawHistory.length * 86400;
+    let totalSeconds = filteredRaw.length * 86400;
 
-    rawHistory.forEach(r => {
+    filteredRaw.forEach(r => {
       totalDowntime += r.downtime_seconds || 0;
       totalIncidents += r.incident_count || 0;
     });
@@ -2196,7 +2496,7 @@ app.get('/api/analytics/category/:category', async (req, res) => {
       mtbf,
       totalIncidents,
       totalDowntime,
-      daysCount: rawHistory.length,
+      daysCount: filteredRaw.length,
       category: grade
     });
   } catch (err) {
@@ -2204,9 +2504,10 @@ app.get('/api/analytics/category/:category', async (req, res) => {
   }
 });
 
-// GET /api/analytics/category/:category/history: Returns past 7 days aggregated history for a specific equipment type
+// GET /api/analytics/category/:category/history: Returns past 30 days aggregated history for a specific equipment type
 app.get('/api/analytics/category/:category/history', async (req, res) => {
   const category = req.params.category;
+  const { date: filterDate, month: filterMonth } = req.query;
   try {
     let devices = [];
     if (useJsonFallback) {
@@ -2229,8 +2530,10 @@ app.get('/api/analytics/category/:category/history', async (req, res) => {
       [rawHistory] = await pool.query('SELECT * FROM daily_uptime WHERE device_id IN (?)', [catDeviceIds]);
     }
 
+    const filteredRaw = filterHistoryByDate(rawHistory, filterDate, filterMonth);
+
     const grouped = {};
-    rawHistory.forEach(r => {
+    filteredRaw.forEach(r => {
       let dateStr = r.date;
       if (dateStr instanceof Date || (typeof dateStr === 'string' && dateStr.includes('T'))) {
         const d = new Date(dateStr);
@@ -2249,7 +2552,7 @@ app.get('/api/analytics/category/:category/history', async (req, res) => {
       grouped[dateStr].device_ids.add(r.device_id);
     });
 
-    const dates = Object.keys(grouped).sort().slice(-7);
+    const dates = Object.keys(grouped).sort().slice(-30);
     const result = dates.map(dStr => {
       const g = grouped[dStr];
       const deviceCount = g.device_ids.size || 1;
@@ -2744,13 +3047,13 @@ app.post('/api/suspend-device', async (req, res) => {
     const detailString = `Suspended (${suspendReason})`;
 
     // Set status to Offline, health_status_detail to detailString
-    // and offline_since to 15 minutes ago so it is immediately suspended
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    // and offline_since to 3 hours ago so it is immediately suspended
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
     const updatedDevice = {
       ...device,
       status: 'Offline',
       health_status_detail: detailString,
-      offline_since: fifteenMinutesAgo
+      offline_since: threeHoursAgo
     };
 
     if (useJsonFallback) {
@@ -2762,7 +3065,7 @@ app.post('/api/suspend-device', async (req, res) => {
     } else {
       await pool.query(
         `UPDATE devices SET status = 'Offline', health_status_detail = ?, offline_since = ? WHERE id = ?`,
-        [detailString, fifteenMinutesAgo, device.id]
+        [detailString, threeHoursAgo, device.id]
       );
     }
 
