@@ -479,6 +479,7 @@ body {
 .device-card.suspended::before { background-color: #6b7280; }
 .device-card.suspended-rusak::before { background-color: #ef4444; }
 .device-card.suspended-maintenance::before { background-color: #f59e0b; }
+.device-card.isolated::before { background-color: #a855f7; }
 .device-card.updating::before { background-color: #38bdf8; }
 .device-card.updating {
   border-color: rgba(56, 189, 248, 0.5) !important;
@@ -521,6 +522,7 @@ body {
 .status-indicator.suspended { background: rgba(107, 114, 128, 0.15); color: #9ca3af; }
 .status-indicator.suspended-rusak { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
 .status-indicator.suspended-maintenance { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+.status-indicator.isolated { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
 .status-indicator.updating { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
 
 .card-details {

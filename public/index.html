@@ -54,7 +54,7 @@
 
 
     <!-- System Selector Navigation Tabs -->
-    <div class="nav-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; flex-wrap: wrap;">
+    <div id="nav-tabs-container" class="nav-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; flex-wrap: wrap;">
       <button class="nav-tab active" data-tab="overview" onclick="switchDashboardTab('overview')" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-chart-pie" style="color: #38bdf8;"></i> All Systems Overview</button>
       <button class="nav-tab" data-tab="FIDS" onclick="switchDashboardTab('FIDS')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-tv" style="color: #3b82f6;"></i> FIDS Monitors</button>
       <button class="nav-tab" data-tab="IP PABX" onclick="switchDashboardTab('IP PABX')" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; transition: all 0.2s;"><i class="fa-solid fa-phone-volume" style="color: #a855f7;"></i> PABX Telephony</button>
@@ -315,9 +315,15 @@
               <option value="Online">Online</option>
               <option value="Offline">Offline (Active)</option>
               <option value="Anomaly">Anomaly</option>
+              <option value="Isolated">Offline Isolated (30m+ Low Ping)</option>
               <option value="Suspended">Offline Priority (All Suspended)</option>
               <option value="Suspended-Rusak">Suspended - Rusak</option>
               <option value="Suspended-Maintenance">Suspended - Maintenance</option>
+            </select>
+            <select id="latency-sort-filter" onchange="onLatencySortChange()" style="padding: 6px 12px; border-radius: 6px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.15); color: #fff; font-size: 12px; outline: none; cursor: pointer;">
+              <option value="DEFAULT">Sort: Default</option>
+              <option value="LATENCY_DESC">⚡ Latency: High → Low</option>
+              <option value="LATENCY_ASC">⚡ Latency: Low → High</option>
             </select>
           </div>
         </div>
@@ -519,6 +525,38 @@
 
     </div>
 
+    <!-- IP Cluster Access Control & Subnet Routing Management -->
+    <div class="glass" style="padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px;"><i class="fa-solid fa-network-wired" style="color: #a855f7;"></i> IP Cluster Access Control & Dynamic Equipment Subnets</h3>
+          <span style="font-size: 11px; color: var(--text-muted);">Atur rentang IP Subnet yang diizinkan untuk ping otomatis dan alokasikan kategori peralatan (FIDS, CCTV, Fire Alarm, Access Door, dll).</span>
+        </div>
+        <button onclick="openIpClusterModal()" style="padding: 8px 14px; border-radius: 6px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-plus"></i> Add New IP Cluster
+        </button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="devices-table" style="width: 100%; font-size: 12px;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nama Cluster</th>
+              <th>Kategori Peralatan</th>
+              <th>Rentang IP (Awal – Akhir)</th>
+              <th>Status Akses Ping</th>
+              <th>Keterangan</th>
+              <th style="text-align: center;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="ip-clusters-table-body">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Bottom Visualization: Batches Load Balancer -->
     <div class="glass" style="padding: 20px; border-radius: 12px; margin-bottom: 20px;">
       <div class="container-title" style="margin-bottom: 16px;">
@@ -540,11 +578,21 @@
           <h3 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px;"><i class="fa-solid fa-chart-line" style="color: #ec4899;"></i> Equipment Reliability & Availability Analytics</h3>
           <span style="font-size: 11px; color: var(--text-muted);">Monitor and analyze availability trends and failure cycles (MTBF/MTTR).</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <label for="analytics-device-select" style="font-size: 13px; font-weight: 600;">Select Equipment:</label>
-          <select id="analytics-device-select" onchange="loadDeviceAnalytics()" style="padding: 8px 12px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; outline: none; font-size: 13px; min-width: 220px;">
-            <!-- Options loaded dynamically -->
-          </select>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="analytics-date-filter" style="font-size: 12px; font-weight: 600; color: #e2e8f0;"><i class="fa-solid fa-calendar-days" style="color:#ec4899;"></i> Date:</label>
+            <input type="date" id="analytics-date-filter" onchange="loadDeviceAnalytics()" style="padding: 7px 10px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px; outline: none;">
+            <button onclick="clearAnalyticsDateFilter()" title="Reset Date Filter" style="padding: 7px 10px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text-muted); cursor: pointer;"><i class="fa-solid fa-rotate-left"></i> Reset Date</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="analytics-device-select" style="font-size: 12px; font-weight: 600; color: #e2e8f0;">Equipment:</label>
+            <select id="analytics-device-select" onchange="loadDeviceAnalytics()" style="padding: 7px 10px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; outline: none; font-size: 12px; min-width: 180px;">
+              <!-- Options loaded dynamically -->
+            </select>
+          </div>
+          <button onclick="openPdfExportModal()" style="padding: 7px 14px; border-radius: 6px; background: rgba(236, 72, 153, 0.2); border: 1px solid rgba(236, 72, 153, 0.4); color: #f472b6; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; margin-left: 4px;">
+            <i class="fa-solid fa-file-pdf"></i> Export PDF Report
+          </button>
         </div>
       </div>
 
@@ -619,7 +667,8 @@
             <input type="hidden" id="edit-device-id" value="">
             <div class="form-group">
               <label for="device-ip">IP Address</label>
-              <input type="text" id="device-ip" placeholder="e.g. 172.23.5.15" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+              <input type="text" id="device-ip" oninput="onDeviceIpInput(this.value)" placeholder="e.g. 172.23.5.15" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+              <div id="ip-cluster-hint" style="font-size: 11px; margin-top: 4px; min-height: 16px;"></div>
             </div>
             <div class="form-group">
               <label for="device-name">Device Name</label>
@@ -837,6 +886,134 @@
           <button type="button" onclick="submitDeviceSuspend()" style="padding: 8px 18px; border-radius: 6px; background: rgba(244, 63, 94, 0.25); border: 1px solid rgba(244, 63, 94, 0.4); color: #f43f5e; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-ban"></i> Confirm Suspend</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal PDF Export Report -->
+  <div id="pdf-export-modal" class="modal-overlay" onclick="if(event.target === this) closePdfExportModal()">
+    <div class="modal-content glass" style="max-width: 520px; padding: 24px; border: 1px solid rgba(236, 72, 153, 0.3);">
+      <div class="modal-header" style="margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <h2 style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 0; color: #fff;">
+          <i class="fa-solid fa-file-pdf" style="color: #ec4899;"></i> Export Analytics PDF Report
+        </h2>
+        <button onclick="closePdfExportModal()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="pdf-modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- Period Selection -->
+        <div>
+          <label style="font-size: 13px; font-weight: 600; color: #e2e8f0; display: block; margin-bottom: 8px;">Pilih Periode Laporan:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+            <label class="pdf-period-option" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; text-align: center;">
+              <input type="radio" name="pdf-period-type" value="today" checked onchange="togglePdfPeriodInputs()" style="accent-color: #ec4899;">
+              <strong style="font-size: 12px; color: #fff;"><i class="fa-solid fa-sun"></i> Today</strong>
+              <span style="font-size: 10px; color: var(--text-muted);">Hari Ini</span>
+            </label>
+
+            <label class="pdf-period-option" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; text-align: center;">
+              <input type="radio" name="pdf-period-type" value="select-date" onchange="togglePdfPeriodInputs()" style="accent-color: #ec4899;">
+              <strong style="font-size: 12px; color: #fff;"><i class="fa-solid fa-calendar-day"></i> Select Date</strong>
+              <span style="font-size: 10px; color: var(--text-muted);">Tanggal Spesifik</span>
+            </label>
+
+            <label class="pdf-period-option" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; text-align: center;">
+              <input type="radio" name="pdf-period-type" value="monthly" onchange="togglePdfPeriodInputs()" style="accent-color: #ec4899;">
+              <strong style="font-size: 12px; color: #fff;"><i class="fa-solid fa-calendar-days"></i> Monthly</strong>
+              <span style="font-size: 10px; color: var(--text-muted);">Rekap Bulanan</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Conditional Date Inputs -->
+        <div id="pdf-date-input-container" style="display: none; flex-direction: column; gap: 6px;">
+          <label for="pdf-select-date" style="font-size: 12px; color: var(--text-muted);">Pilih Tanggal Laporan:</label>
+          <input type="date" id="pdf-select-date" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px;">
+        </div>
+
+        <div id="pdf-month-input-container" style="display: none; flex-direction: column; gap: 6px;">
+          <label for="pdf-select-month" style="font-size: 12px; color: var(--text-muted);">Pilih Bulan & Tahun Laporan:</label>
+          <input type="month" id="pdf-select-month" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px;">
+        </div>
+
+        <!-- Scope Selection -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="pdf-scope-select" style="font-size: 12px; color: var(--text-muted);">Skop Perangkat Laporan:</label>
+          <select id="pdf-scope-select" style="padding: 8px 12px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px; outline: none;">
+            <option value="OVERALL">Semua Perangkat (Overall Systems)</option>
+            <option value="cat-FIDS">Kategori FIDS Displays</option>
+            <option value="cat-IP PABX">Kategori IP PABX</option>
+            <option value="cat-CCTV">Kategori CCTV Cameras</option>
+            <option value="cat-Fire Alarm">Kategori Fire Alarm System</option>
+          </select>
+        </div>
+
+        <!-- Submit Button -->
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+          <button type="button" onclick="closePdfExportModal()" style="padding: 8px 16px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; cursor: pointer; font-size: 13px;">Batal</button>
+          <button type="button" onclick="generateAnalyticsPdfReport()" style="padding: 8px 18px; border-radius: 6px; background: rgba(236, 72, 153, 0.25); border: 1px solid rgba(236, 72, 153, 0.4); color: #f472b6; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-file-pdf"></i> Generate PDF Report</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Form IP Cluster -->
+  <div id="ip-cluster-modal" class="modal-overlay" onclick="if(event.target === this) closeIpClusterModal()">
+    <div class="modal-content glass" style="max-width: 500px; padding: 24px; border: 1px solid rgba(168, 85, 247, 0.3);">
+      <div class="modal-header" style="margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <h2 style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 0; color: #fff;">
+          <i class="fa-solid fa-network-wired" style="color: #a855f7;"></i> <span id="ip-cluster-modal-title">Add New IP Cluster</span>
+        </h2>
+        <button onclick="closeIpClusterModal()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="ip-cluster-form" onsubmit="submitIpClusterForm(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <input type="hidden" id="cluster-id" value="">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="cluster-name" style="font-size: 12px; color: var(--text-muted);">Nama Cluster IP</label>
+          <input type="text" id="cluster-name" placeholder="misal: Cluster Access Control Door" required style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px;">
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="cluster-equipment-type" style="font-size: 12px; color: var(--text-muted);">Kategori Peralatan (Dynamic Tab)</label>
+          <input type="text" id="cluster-equipment-type" placeholder="e.g. Access Control Door, FIDS, CCTV, Fire Alarm" required list="equipment-type-datalist" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px;">
+          <datalist id="equipment-type-datalist">
+            <option value="FIDS"></option>
+            <option value="Server FIDS"></option>
+            <option value="CCTV"></option>
+            <option value="Server CCTV"></option>
+            <option value="IP PABX"></option>
+            <option value="Fire Alarm System"></option>
+            <option value="Server Fire Alarm System"></option>
+            <option value="Access Control Door"></option>
+          </datalist>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="cluster-ip-start" style="font-size: 12px; color: var(--text-muted);">IP Awal (Start IP)</label>
+            <input type="text" id="cluster-ip-start" placeholder="misal: 172.23.10.1" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px; font-family: monospace;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="cluster-ip-end" style="font-size: 12px; color: var(--text-muted);">IP Akhir (End IP)</label>
+            <input type="text" id="cluster-ip-end" placeholder="misal: 172.23.10.254" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px; font-family: monospace;">
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="cluster-description" style="font-size: 12px; color: var(--text-muted);">Keterangan / Lokasi Jaringan</label>
+          <input type="text" id="cluster-description" placeholder="e.g. Subnet Perangkat Akses Pintu Terminal 1 & 2" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px;">
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+          <input type="checkbox" id="cluster-is-active" checked style="accent-color: #a855f7; width: 16px; height: 16px; cursor: pointer;">
+          <label for="cluster-is-active" style="font-size: 12px; color: #fff; cursor: pointer;">Aktifkan Akses Ping untuk Cluster ini</label>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;">
+          <button type="button" onclick="closeIpClusterModal()" style="padding: 8px 16px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; cursor: pointer; font-size: 13px;">Batal</button>
+          <button type="submit" style="padding: 8px 18px; border-radius: 6px; background: rgba(168, 85, 247, 0.25); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-floppy-disk"></i> Simpan Cluster</button>
+        </div>
+      </form>
     </div>
   </div>
 
