@@ -294,6 +294,12 @@
       <button class="vnc-btn vnc-btn-autofill" id="btn-autofill" title="Otomatis mengisikan username elektro & password tlp808rgn443">
         <i class="fa-solid fa-key"></i> 🔑 Auto-Fill (elektro / tlp808rgn443)
       </button>
+      <button class="vnc-btn vnc-btn-cad" id="btn-cad" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #f87171;" title="Kirimkan kombinasi tombol Ctrl+Alt+Delete ke FIDS">
+        <i class="fa-solid fa-bolt"></i> Ctrl+Alt+Del
+      </button>
+      <button class="vnc-btn vnc-btn-f11" id="btn-f11" style="background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); color: #60a5fa;" title="Kirimkan tombol F11 (Full Screen Mode) ke FIDS">
+        <i class="fa-solid fa-expand"></i> F11 (Full Screen)
+      </button>
       <button class="vnc-btn vnc-btn-signin" id="btn-web-signin" title="Buka Web Sign In FIDS di tab baru">
         <i class="fa-solid fa-arrow-up-right-from-square"></i> Web Sign In (.41 / .51)
       </button>
@@ -534,6 +540,32 @@
         }, 2000);
       };
 
+      // Send Ctrl+Alt+Del Action
+      document.getElementById('btn-cad').onclick = () => {
+        if (rfb && rfb.sendCtrlAltDel) {
+          rfb.sendCtrlAltDel();
+        } else if (rfb && rfb.sendKey) {
+          rfb.sendKey(0xFFE3, 'ControlLeft', true);
+          rfb.sendKey(0xFFE9, 'AltLeft', true);
+          rfb.sendKey(0xFFFF, 'Delete', true);
+        }
+        statusLabel.innerHTML = '<i class="fa-solid fa-bolt" style="color:#f87171;"></i> Ctrl+Alt+Del Sent!';
+        setTimeout(() => {
+          statusLabel.innerHTML = '<i class="fa-solid fa-circle-check"></i> Connected';
+        }, 2000);
+      };
+
+      // Send F11 Action
+      document.getElementById('btn-f11').onclick = () => {
+        if (rfb && rfb.sendKey) {
+          rfb.sendKey(0xFFC8); // Keysym for F11
+        }
+        statusLabel.innerHTML = '<i class="fa-solid fa-expand" style="color:#60a5fa;"></i> F11 (Full Screen) Sent!';
+        setTimeout(() => {
+          statusLabel.innerHTML = '<i class="fa-solid fa-circle-check"></i> Connected';
+        }, 2000);
+      };
+
       // Direct Web Sign In Link
       document.getElementById('btn-web-signin').onclick = () => {
         window.open(`http://${window.vncIp}:90/fids/`, '_blank');
@@ -558,6 +590,11 @@
           if (k === 'Backspace') rfb.sendKey(0xFF08);
           else if (k === 'Tab') rfb.sendKey(0xFF09);
           else if (k === 'Enter') rfb.sendKey(0xFF0D);
+          else if (k === 'F11') rfb.sendKey(0xFFC8);
+          else if (k === 'CAD') {
+            if (rfb && rfb.sendCtrlAltDel) rfb.sendCtrlAltDel();
+            else if (rfb && rfb.sendKey) rfb.sendKey(0xFFE3, 'ControlLeft', true);
+          }
           else if (k === ' ') rfb.sendKey(0x0020);
           else if (k && k.length === 1) rfb.sendKey(k.charCodeAt(0));
           triggerClickAnimation();

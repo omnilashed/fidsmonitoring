@@ -3817,5 +3817,21 @@ function sendVncClick(button) {
 }
 window.sendVncClick = sendVncClick;
 
+function sendVncCtrlAltDel() {
+  const overlay = document.getElementById('vnc-status-overlay');
+  if (overlay) {
+    overlay.innerHTML = `<i class="fa-solid fa-bolt" style="color:#f87171;"></i> Sent Action: [ Ctrl + Alt + Delete ]`;
+  }
+}
+window.sendVncCtrlAltDel = sendVncCtrlAltDel;
+
+function sendVncF11() {
+  const overlay = document.getElementById('vnc-status-overlay');
+  if (overlay) {
+    overlay.innerHTML = `<i class="fa-solid fa-expand" style="color:#60a5fa;"></i> Sent Key: [ F11 Full Screen ]`;
+  }
+}
+window.sendVncF11 = sendVncF11;
+
 
 
