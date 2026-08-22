@@ -477,6 +477,18 @@ body {
 .device-card.offline::before { background-color: #ef4444; }
 .device-card.anomaly::before { background-color: #fbbf24; }
 .device-card.suspended::before { background-color: #6b7280; }
+.device-card.suspended-rusak::before { background-color: #ef4444; }
+.device-card.suspended-maintenance::before { background-color: #f59e0b; }
+.device-card.updating::before { background-color: #38bdf8; }
+.device-card.updating {
+  border-color: rgba(56, 189, 248, 0.5) !important;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
+  animation: cardUpdatingPulse 1.2s infinite alternate ease-in-out;
+}
+@keyframes cardUpdatingPulse {
+  0% { opacity: 0.85; }
+  100% { opacity: 1; }
+}
 
 .card-top {
   display: flex;
@@ -507,6 +519,9 @@ body {
 .status-indicator.offline { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 .status-indicator.anomaly { background: rgba(251, 191, 36, 0.15); color: #fde047; }
 .status-indicator.suspended { background: rgba(107, 114, 128, 0.15); color: #9ca3af; }
+.status-indicator.suspended-rusak { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+.status-indicator.suspended-maintenance { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+.status-indicator.updating { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
 
 .card-details {
   display: flex;

@@ -2,6 +2,7 @@
 let devices = [];
 let logs = [];
 let currentFilter = 'ALL';
+let currentStatusFilter = 'ALL';
 let activeView = 'grid';
 let currentTab = 'overview'; // 'overview' | 'FIDS' | 'IP PABX' | 'CCTV' | 'Fire Alarm'
 let ws = null;
@@ -402,6 +403,24 @@ function updateSummaryMetrics() {
   document.getElementById('offline-fids').textContent = offline;
   document.getElementById('anomaly-fids').textContent = anomaly;
 
+  // Dynamic Total Displays title matching active tab
+  const totalCardTitle = document.getElementById('total-fids-card-title');
+  if (totalCardTitle) {
+    if (currentTab === 'overview') {
+      totalCardTitle.textContent = 'Total Devices';
+    } else if (currentTab === 'FIDS') {
+      totalCardTitle.textContent = 'Total FIDS Displays';
+    } else if (currentTab === 'IP PABX') {
+      totalCardTitle.textContent = 'Total IP PABX Devices';
+    } else if (currentTab === 'CCTV') {
+      totalCardTitle.textContent = 'Total CCTV Devices';
+    } else if (currentTab === 'Fire Alarm') {
+      totalCardTitle.textContent = 'Total Fire Alarm Devices';
+    } else {
+      totalCardTitle.textContent = `Total ${currentTab} Devices`;
+    }
+  }
+
   document.getElementById('online-pct').textContent  = total > 0 ? `${Math.round((online / total) * 100)}% Online` : '0% Online';
   document.getElementById('offline-pct').textContent = total > 0 ? `${Math.round((offline / total) * 100)}% Down` : '0% Down';
 
@@ -568,12 +587,29 @@ function renderGrid() {
   const container = document.getElementById('fids-grid');
   container.innerHTML = '';
   
-  // Filter by terminal AND the active tab's equipment group
+  // Filter by terminal AND the active tab's equipment group AND status filter
   const tabTypes = currentTab !== 'overview' ? (EQUIPMENT_GROUPS[currentTab] || null) : null;
   const filtered = devices.filter(d => {
     const matchTerminal  = currentFilter === 'ALL' || d.terminal === currentFilter;
     const matchEquipment = !tabTypes || tabTypes.includes(d.equipment_type);
-    return matchTerminal && matchEquipment;
+    
+    let matchStatus = true;
+    const isSusp = isDeviceSuspended(d) || (d.health_status_detail && d.health_status_detail.startsWith('Suspended'));
+    if (currentStatusFilter === 'Online') {
+      matchStatus = d.status === 'Online';
+    } else if (currentStatusFilter === 'Offline') {
+      matchStatus = d.status === 'Offline' && !isSusp;
+    } else if (currentStatusFilter === 'Anomaly') {
+      matchStatus = d.status === 'Anomaly';
+    } else if (currentStatusFilter === 'Suspended') {
+      matchStatus = isSusp;
+    } else if (currentStatusFilter === 'Suspended-Rusak') {
+      matchStatus = isSusp && d.health_status_detail && d.health_status_detail.includes('Rusak');
+    } else if (currentStatusFilter === 'Suspended-Maintenance') {
+      matchStatus = isSusp && d.health_status_detail && d.health_status_detail.includes('Maintenance');
+    }
+
+    return matchTerminal && matchEquipment && matchStatus;
   });
 
   const totalItems = filtered.length;
@@ -587,33 +623,69 @@ function renderGrid() {
   const sliced = filtered.slice(startIdx, startIdx + gridItemsPerPage);
   
   if (filtered.length === 0) {
-    container.innerHTML = `<div class="glass" style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">No devices matching this terminal filter</div>`;
+    container.innerHTML = `<div class="glass" style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">No devices matching this filter criteria</div>`;
     renderGridPagination(1);
     return;
   }
   
   sliced.forEach(device => {
     const card = document.createElement('div');
+    const isUpdating = device._isUpdating === true;
     const suspended = isDeviceSuspended(device);
     let statusLabel = device.status;
-    if (suspended || device.health_status_detail === 'Suspended (Manual)') {
-      statusLabel = 'Offline (Suspended)';
+    let suspendType = '';
+
+    if (isUpdating) {
+      statusLabel = device._updatingMsg || 'Reconnecting...';
+    } else if (suspended || (device.health_status_detail && device.health_status_detail.startsWith('Suspended'))) {
+      if (device.health_status_detail && device.health_status_detail.includes('Rusak')) {
+        suspendType = 'Rusak';
+        statusLabel = 'Offline (Suspended - Rusak)';
+      } else if (device.health_status_detail && device.health_status_detail.includes('Maintenance')) {
+        suspendType = 'Maintenance';
+        statusLabel = 'Offline (Suspended - Maintenance)';
+      } else {
+        suspendType = 'Manual';
+        statusLabel = 'Offline (Suspended)';
+      }
     } else if (device.status === 'Online' && device.health_status_detail) {
       statusLabel = `Online (${device.health_status_detail})`;
     }
 
-    const isActuallySuspended = statusLabel === 'Offline (Suspended)';
-    const cardClass = isActuallySuspended ? 'suspended' : device.status.toLowerCase();
+    const isActuallySuspended = !isUpdating && suspendType !== '';
+    let cardClass = device.status.toLowerCase();
+    if (isUpdating) {
+      cardClass = 'updating';
+    } else if (isActuallySuspended) {
+      if (suspendType === 'Rusak') cardClass = 'suspended-rusak';
+      else if (suspendType === 'Maintenance') cardClass = 'suspended-maintenance';
+      else cardClass = 'suspended';
+    }
+
     card.className = `device-card glass ${cardClass}`;
     
-    let statusBadge = `<span class="status-indicator ${isActuallySuspended ? 'suspended' : device.status.toLowerCase()}">${statusLabel}</span>`;
-    if (device.status === 'Anomaly' && !isActuallySuspended) {
+    let statusBadge = '';
+    if (isUpdating) {
+      statusBadge = `<span class="status-indicator updating"><i class="fa-solid fa-spinner fa-spin"></i> ${statusLabel}</span>`;
+    } else if (isActuallySuspended) {
+      if (suspendType === 'Rusak') {
+        statusBadge = `<span class="status-indicator suspended-rusak"><i class="fa-solid fa-triangle-exclamation"></i> ${statusLabel}</span>`;
+      } else if (suspendType === 'Maintenance') {
+        statusBadge = `<span class="status-indicator suspended-maintenance"><i class="fa-solid fa-screwdriver-wrench"></i> ${statusLabel}</span>`;
+      } else {
+        statusBadge = `<span class="status-indicator suspended">${statusLabel}</span>`;
+      }
+    } else if (device.status === 'Anomaly') {
       statusBadge = `<span class="status-indicator anomaly tooltip" data-tooltip="${device.anomaly_type}">${device.status}</span>`;
+    } else {
+      statusBadge = `<span class="status-indicator ${device.status.toLowerCase()}">${statusLabel}</span>`;
     }
     
     // Action buttons based on status
     let actionBtnHtml = '';
-    if (isActuallySuspended) {
+    if (isUpdating) {
+      actionBtnHtml = `<button disabled style="opacity: 0.8; cursor: wait; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);"><i class="fa-solid fa-spinner fa-spin"></i> Processing...</button>`;
+    } else if (isActuallySuspended) {
       actionBtnHtml = `<button onclick="manuallyReactivateDevice(${device.id})" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);"><i class="fa-solid fa-play"></i> Resume</button>`;
     } else if (device.status === 'Anomaly') {
       let mainAction = '';
@@ -815,7 +887,24 @@ function renderTable() {
     const matchesSearch    = device.name.toLowerCase().includes(searchVal)
       || device.ip_address.includes(searchVal)
       || device.location.toLowerCase().includes(searchVal);
-    return matchesTerminal && matchesEquipment && matchesSearch;
+
+    let matchesStatus = true;
+    const isSusp = isDeviceSuspended(device) || (device.health_status_detail && device.health_status_detail.startsWith('Suspended'));
+    if (currentStatusFilter === 'Online') {
+      matchesStatus = device.status === 'Online';
+    } else if (currentStatusFilter === 'Offline') {
+      matchesStatus = device.status === 'Offline' && !isSusp;
+    } else if (currentStatusFilter === 'Anomaly') {
+      matchesStatus = device.status === 'Anomaly';
+    } else if (currentStatusFilter === 'Suspended') {
+      matchesStatus = isSusp;
+    } else if (currentStatusFilter === 'Suspended-Rusak') {
+      matchesStatus = isSusp && device.health_status_detail && device.health_status_detail.includes('Rusak');
+    } else if (currentStatusFilter === 'Suspended-Maintenance') {
+      matchesStatus = isSusp && device.health_status_detail && device.health_status_detail.includes('Maintenance');
+    }
+
+    return matchesTerminal && matchesEquipment && matchesSearch && matchesStatus;
   });
   
   const totalItems = filtered.length;
@@ -840,19 +929,41 @@ function renderTable() {
   sliced.forEach(device => {
     const row = document.createElement('tr');
     
+    const isUpdating = device._isUpdating === true;
     const suspended = isDeviceSuspended(device);
     let statusLabel = 'Online';
-    if (suspended || device.health_status_detail === 'Suspended (Manual)') {
-      statusLabel = 'Offline (Suspended)';
+    let suspendType = '';
+
+    if (isUpdating) {
+      statusLabel = device._updatingMsg || 'Reconnecting...';
+    } else if (suspended || (device.health_status_detail && device.health_status_detail.startsWith('Suspended'))) {
+      if (device.health_status_detail && device.health_status_detail.includes('Rusak')) {
+        suspendType = 'Rusak';
+        statusLabel = 'Offline (Suspended - Rusak)';
+      } else if (device.health_status_detail && device.health_status_detail.includes('Maintenance')) {
+        suspendType = 'Maintenance';
+        statusLabel = 'Offline (Suspended - Maintenance)';
+      } else {
+        suspendType = 'Manual';
+        statusLabel = 'Offline (Suspended)';
+      }
     } else if (device.health_status_detail) {
       statusLabel = `Online (${device.health_status_detail})`;
     }
 
-    const isActuallySuspended = statusLabel === 'Offline (Suspended)';
+    const isActuallySuspended = !isUpdating && suspendType !== '';
     
     let statusText = `<span class="text-green"><i class="fa-solid fa-display"></i> ${statusLabel}</span>`;
-    if (isActuallySuspended) {
-      statusText = `<span style="color: #9ca3af;"><i class="fa-solid fa-screwdriver-wrench"></i> Offline (Suspended)</span>`;
+    if (isUpdating) {
+      statusText = `<span style="color: #38bdf8;"><i class="fa-solid fa-spinner fa-spin"></i> ${statusLabel}</span>`;
+    } else if (isActuallySuspended) {
+      if (suspendType === 'Rusak') {
+        statusText = `<span style="color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> Offline (Suspended - Rusak)</span>`;
+      } else if (suspendType === 'Maintenance') {
+        statusText = `<span style="color: #fbbf24;"><i class="fa-solid fa-screwdriver-wrench"></i> Offline (Suspended - Maintenance)</span>`;
+      } else {
+        statusText = `<span style="color: #9ca3af;"><i class="fa-solid fa-ban"></i> Offline (Suspended)</span>`;
+      }
     } else if (device.status === 'Offline') {
       statusText = `<span class="text-red"><i class="fa-solid fa-display"></i> Offline</span>`;
     } else if (device.status === 'Anomaly') {
@@ -860,13 +971,15 @@ function renderTable() {
     }
     
     // Anomaly column text details
-    const anomalyDetails = !isActuallySuspended && device.anomaly_type 
+    const anomalyDetails = !isActuallySuspended && !isUpdating && device.anomaly_type 
       ? `<span class="table-tag text-yellow">${device.anomaly_type}</span>` 
       : '<span style="color:var(--text-muted);">-</span>';
     
     // Operations buttons
     let actionsHtml = '';
-    if (isActuallySuspended) {
+    if (isUpdating) {
+      actionsHtml = `<button disabled style="opacity: 0.8; cursor: wait; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);"><i class="fa-solid fa-spinner fa-spin"></i> Processing...</button>`;
+    } else if (isActuallySuspended) {
       actionsHtml = `<button onclick="manuallyReactivateDevice(${device.id})" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);"><i class="fa-solid fa-play"></i> Resume</button>`;
     } else if (device.status === 'Anomaly') {
       let mainAction = '';
@@ -1024,31 +1137,113 @@ function updateChartData() {
 
 function isDeviceSuspended(device) {
   if (device.status !== 'Offline') return false;
+  if (device.health_status_detail && device.health_status_detail.startsWith('Suspended')) return true;
   if (!device.offline_since) return false;
   const elapsedMs = Date.now() - new Date(device.offline_since).getTime();
   return elapsedMs > 10 * 60 * 1000;
 }
 window.isDeviceSuspended = isDeviceSuspended;
 
-async function manuallySuspendDevice(deviceId) {
-  if (!confirm('Are you sure you want to suspend background monitoring for this device?')) return;
+function manuallySuspendDevice(deviceId) {
+  try {
+    const device = devices.find(d => String(d.id) === String(deviceId));
+    if (!device) {
+      console.warn('Device not found for ID:', deviceId);
+      alert('Device not found in active list');
+      return;
+    }
+    
+    const targetInput = document.getElementById('suspend-target-device-id');
+    const nameEl = document.getElementById('suspend-modal-device-name');
+    const ipEl = document.getElementById('suspend-modal-device-ip');
+    const noteEl = document.getElementById('suspend-note');
+    
+    if (targetInput) targetInput.value = device.id;
+    if (nameEl) nameEl.textContent = device.name || 'Device';
+    if (ipEl) ipEl.textContent = `${device.ip_address || ''} • ${device.location || ''}`;
+    if (noteEl) noteEl.value = '';
+    
+    const radioRusak = document.querySelector('input[name="suspend-reason"][value="Rusak"]');
+    if (radioRusak) radioRusak.checked = true;
+
+    const modal = document.getElementById('suspend-modal');
+    if (modal) {
+      modal.classList.add('active');
+    } else {
+      console.error('#suspend-modal element not found in DOM');
+      alert('Error: Modal element #suspend-modal not found');
+    }
+  } catch (err) {
+    console.error('Error launching suspend dialog:', err);
+    alert('Error launching suspend dialog: ' + err.message);
+  }
+}
+window.manuallySuspendDevice = manuallySuspendDevice;
+
+function closeSuspendModal() {
+  const modal = document.getElementById('suspend-modal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+window.closeSuspendModal = closeSuspendModal;
+
+async function submitDeviceSuspend() {
+  const targetInput = document.getElementById('suspend-target-device-id');
+  const deviceId = targetInput ? targetInput.value : null;
+  const reasonRadio = document.querySelector('input[name="suspend-reason"]:checked');
+  const reason = reasonRadio ? reasonRadio.value : 'Rusak';
+  const noteEl = document.getElementById('suspend-note');
+  const note = noteEl ? noteEl.value.trim() : '';
+
+  if (!deviceId) {
+    alert('Invalid device selected for suspend');
+    return;
+  }
+
   try {
     const res = await fetch('/api/suspend-device', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId })
+      body: JSON.stringify({ deviceId, reason, note })
     });
     const result = await res.json();
-    if (!result.success) {
+    if (result.success) {
+      closeSuspendModal();
+    } else {
       alert(`Failed to suspend device: ${result.error}`);
     }
   } catch (err) {
     alert(`Error: ${err.message}`);
   }
 }
-window.manuallySuspendDevice = manuallySuspendDevice;
+window.submitDeviceSuspend = submitDeviceSuspend;
+
+function onStatusFilterChange() {
+  const sel = document.getElementById('status-filter');
+  if (sel) {
+    currentStatusFilter = sel.value;
+    gridCurrentPage = 1;
+    tableCurrentPage = 1;
+    renderGrid();
+    renderTable();
+  }
+}
+window.onStatusFilterChange = onStatusFilterChange;
 
 async function manuallyReactivateDevice(deviceId) {
+  const device = devices.find(d => String(d.id) === String(deviceId));
+  const deviceLabel = device ? `"${device.name}" (${device.ip_address})` : 'perangkat ini';
+  const confirmMsg = `Apakah Anda yakin ingin mengaktifkan kembali (Resume) pemantauan otomatis untuk ${deviceLabel}?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  if (device) {
+    device._isUpdating = true;
+    device._updatingMsg = 'Reconnecting...';
+    renderDashboard();
+  }
+
   try {
     const res = await fetch('/api/resume-device', {
       method: 'POST',
@@ -1057,19 +1252,71 @@ async function manuallyReactivateDevice(deviceId) {
     });
     const result = await res.json();
     if (!result.success) {
-      alert(`Failed to resume device: ${result.error}`);
+      if (device) delete device._isUpdating;
+      renderDashboard();
+      alert(`Gagal mengaktifkan kembali perangkat: ${result.error}`);
     }
   } catch (err) {
+    if (device) delete device._isUpdating;
+    renderDashboard();
     alert(`Error: ${err.message}`);
   }
 }
 window.manuallyReactivateDevice = manuallyReactivateDevice;
+
+async function submitDeviceSuspend() {
+  const targetInput = document.getElementById('suspend-target-device-id');
+  const deviceId = targetInput ? targetInput.value : null;
+  const reasonRadio = document.querySelector('input[name="suspend-reason"]:checked');
+  const reason = reasonRadio ? reasonRadio.value : 'Rusak';
+  const noteEl = document.getElementById('suspend-note');
+  const note = noteEl ? noteEl.value.trim() : '';
+
+  if (!deviceId) {
+    alert('Invalid device selected for suspend');
+    return;
+  }
+
+  const device = devices.find(d => String(d.id) === String(deviceId));
+  if (device) {
+    device._isUpdating = true;
+    device._updatingMsg = `Suspending (${reason})...`;
+    renderDashboard();
+  }
+  closeSuspendModal();
+
+  try {
+    const res = await fetch('/api/suspend-device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, reason, note })
+    });
+    const result = await res.json();
+    if (!result.success) {
+      if (device) delete device._isUpdating;
+      renderDashboard();
+      alert(`Failed to suspend device: ${result.error}`);
+    }
+  } catch (err) {
+    if (device) delete device._isUpdating;
+    renderDashboard();
+    alert(`Error: ${err.message}`);
+  }
+}
+window.submitDeviceSuspend = submitDeviceSuspend;
 
 // Trigger control commands via API
 async function triggerDeviceAction(deviceId, endpoint) {
   if (endpoint === 'ping-test') {
     runLivePingDiagnostic(deviceId);
     return;
+  }
+
+  const device = devices.find(d => String(d.id) === String(deviceId));
+  if (device) {
+    device._isUpdating = true;
+    device._updatingMsg = 'Executing command...';
+    renderDashboard();
   }
 
   try {
@@ -1083,9 +1330,13 @@ async function triggerDeviceAction(deviceId, endpoint) {
     const result = await response.json();
     
     if (!result.success) {
+      if (device) delete device._isUpdating;
+      renderDashboard();
       alert(`Action failed: ${result.error}`);
     }
   } catch (err) {
+    if (device) delete device._isUpdating;
+    renderDashboard();
     console.error('Failed to dispatch device command:', err);
     alert('Failed to connect to backend server endpoint.');
   }
