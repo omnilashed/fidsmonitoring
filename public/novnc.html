@@ -27,12 +27,14 @@
     #vnc-header {
       background: var(--glass-bg);
       border-bottom: 1px solid var(--glass-border);
-      padding: 12px 24px;
+      padding: 10px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       backdrop-filter: blur(10px);
       z-index: 10;
+      flex-wrap: wrap;
+      gap: 10px;
     }
     .brand-section {
       display: flex;
@@ -44,12 +46,12 @@
       color: #38bdf8;
     }
     .monitor-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       margin: 0;
     }
     .monitor-ip {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
       font-family: monospace;
     }
@@ -82,6 +84,53 @@
       color: #f87171;
       border-color: rgba(239, 68, 68, 0.2);
     }
+
+    /* Action Toolbar */
+    .vnc-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .vnc-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .vnc-btn-autofill {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .vnc-btn-autofill:hover {
+      background: rgba(16, 185, 129, 0.35);
+    }
+    .vnc-btn-signin {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+    }
+    .vnc-btn-signin:hover {
+      background: rgba(56, 189, 248, 0.3);
+    }
+    .vnc-btn-keyboard {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: rgba(168, 85, 247, 0.3);
+      color: #c084fc;
+    }
+    .vnc-btn-mousepad {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+    }
+
     #vnc-canvas-container {
       flex-grow: 1;
       display: flex;
@@ -90,7 +139,82 @@
       overflow: auto;
       background: #000;
       position: relative;
+      cursor: crosshair;
     }
+    
+    /* On-Screen Mouse Pointer Visual Overlay */
+    #vnc-cursor-pointer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      pointer-events: none;
+      transform: translate(0, 0);
+      transition: top 0.03s ease-out, left 0.03s ease-out, transform 0.15s ease-out;
+      z-index: 999;
+      display: block;
+    }
+    .cursor-icon {
+      color: #ef4444;
+      font-size: 24px;
+      text-shadow: 0 0 8px rgba(0,0,0,0.9), 0 0 14px rgba(239,68,68,0.9);
+      filter: drop-shadow(1px 2px 5px rgba(0,0,0,0.95));
+      transform: rotate(-25deg);
+      display: block;
+    }
+    .cursor-coords-pill {
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      background: rgba(0,0,0,0.85);
+      color: #fbbf24;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: monospace;
+      white-space: nowrap;
+      border: 1px solid rgba(251,191,36,0.4);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    /* Virtual Keyboard & Mousepad Panels */
+    .overlay-panel {
+      display: none;
+      background: rgba(15, 23, 42, 0.95);
+      padding: 10px 16px;
+      border-top: 1px solid var(--glass-border);
+      flex-direction: column;
+      gap: 6px;
+      backdrop-filter: blur(10px);
+      z-index: 100;
+    }
+    .vnc-key-row {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .vnc-key {
+      padding: 7px 11px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      min-width: 32px;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .vnc-key:hover {
+      background: rgba(168, 85, 247, 0.3);
+      color: #c084fc;
+      transform: translateY(-1px);
+    }
+    .vnc-key:active {
+      transform: translateY(1px);
+    }
+
     /* Spinner for loading state */
     .spinner {
       border: 3px solid rgba(255,255,255,0.05);
@@ -141,10 +265,6 @@
       margin-bottom: 20px;
       outline: none;
       box-sizing: border-box;
-      transition: border-color 0.2s;
-    }
-    .auth-box input[type="password"]:focus {
-      border-color: #38bdf8;
     }
     .auth-box button {
       width: 100%;
@@ -157,9 +277,6 @@
       cursor: pointer;
       font-size: 13px;
     }
-    .auth-box button:hover {
-      opacity: 0.9;
-    }
   </style>
 </head>
 <body>
@@ -171,15 +288,113 @@
         <span class="monitor-ip" id="lbl-ip">Target: Loading...</span>
       </div>
     </div>
-    <div>
+
+    <!-- Quick Control Actions Toolbar -->
+    <div class="vnc-toolbar">
+      <button class="vnc-btn vnc-btn-autofill" id="btn-autofill" title="Otomatis mengisikan username elektro & password tlp808rgn443">
+        <i class="fa-solid fa-key"></i> 🔑 Auto-Fill (elektro / tlp808rgn443)
+      </button>
+      <button class="vnc-btn vnc-btn-signin" id="btn-web-signin" title="Buka Web Sign In FIDS di tab baru">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i> Web Sign In (.41 / .51)
+      </button>
+      <button class="vnc-btn vnc-btn-keyboard" id="btn-toggle-kbd">
+        <i class="fa-solid fa-keyboard"></i> Virtual Keyboard
+      </button>
+      <button class="vnc-btn vnc-btn-mousepad" id="btn-toggle-mouse">
+        <i class="fa-solid fa-computer-mouse"></i> Touch Mousepad
+      </button>
       <span class="status-badge connecting" id="lbl-status">
         <i class="fa-solid fa-circle-notch fa-spin"></i> Connecting
       </span>
     </div>
   </header>
 
+  <!-- Main Screen Viewport Container -->
   <div id="vnc-canvas-container">
     <div class="spinner" id="vnc-loader"></div>
+
+    <!-- On-Screen Mouse Pointer Visual Overlay -->
+    <div id="vnc-cursor-pointer">
+      <i class="fa-solid fa-arrow-pointer cursor-icon"></i>
+      <span class="cursor-coords-pill" id="vnc-cursor-coords">X: 640, Y: 360</span>
+    </div>
+  </div>
+
+  <!-- Virtual Keyboard Panel -->
+  <div class="overlay-panel" id="vnc-virtual-keyboard-panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #c084fc; font-weight: 600;">
+      <span><i class="fa-solid fa-keyboard"></i> Virtual Keyboard Layar Sentuh</span>
+      <span style="font-size: 10px; color: var(--text-muted);">Klik tombol untuk mengirim input langsung ke layar FIDS</span>
+    </div>
+    
+    <div class="vnc-key-row">
+      <button class="vnc-key" data-key="1">1</button>
+      <button class="vnc-key" data-key="2">2</button>
+      <button class="vnc-key" data-key="3">3</button>
+      <button class="vnc-key" data-key="4">4</button>
+      <button class="vnc-key" data-key="5">5</button>
+      <button class="vnc-key" data-key="6">6</button>
+      <button class="vnc-key" data-key="7">7</button>
+      <button class="vnc-key" data-key="8">8</button>
+      <button class="vnc-key" data-key="9">9</button>
+      <button class="vnc-key" data-key="0">0</button>
+      <button class="vnc-key" data-key="Backspace" style="background: rgba(239,68,68,0.25); color: #f87171;">⌫ Backspace</button>
+    </div>
+    
+    <div class="vnc-key-row">
+      <button class="vnc-key" data-key="Tab" style="background: rgba(56,189,248,0.25); color: #38bdf8;">⇥ Tab</button>
+      <button class="vnc-key" data-key="q">Q</button>
+      <button class="vnc-key" data-key="w">W</button>
+      <button class="vnc-key" data-key="e">E</button>
+      <button class="vnc-key" data-key="r">R</button>
+      <button class="vnc-key" data-key="t">T</button>
+      <button class="vnc-key" data-key="y">Y</button>
+      <button class="vnc-key" data-key="u">U</button>
+      <button class="vnc-key" data-key="i">I</button>
+      <button class="vnc-key" data-key="o">O</button>
+      <button class="vnc-key" data-key="p">P</button>
+    </div>
+
+    <div class="vnc-key-row">
+      <button class="vnc-key" data-key="a">A</button>
+      <button class="vnc-key" data-key="s">S</button>
+      <button class="vnc-key" data-key="d">D</button>
+      <button class="vnc-key" data-key="f">F</button>
+      <button class="vnc-key" data-key="g">G</button>
+      <button class="vnc-key" data-key="h">H</button>
+      <button class="vnc-key" data-key="j">J</button>
+      <button class="vnc-key" data-key="k">K</button>
+      <button class="vnc-key" data-key="l">L</button>
+      <button class="vnc-key" data-key="Enter" style="background: rgba(16,185,129,0.3); color: #34d399; font-weight: bold;">↵ Enter</button>
+    </div>
+
+    <div class="vnc-key-row">
+      <button class="vnc-key" data-key="z">Z</button>
+      <button class="vnc-key" data-key="x">X</button>
+      <button class="vnc-key" data-key="c">C</button>
+      <button class="vnc-key" data-key="v">V</button>
+      <button class="vnc-key" data-key="b">B</button>
+      <button class="vnc-key" data-key="n">N</button>
+      <button class="vnc-key" data-key="m">M</button>
+      <button class="vnc-key" data-key=" " style="width: 140px;">Space</button>
+    </div>
+  </div>
+
+  <!-- Touch Mousepad Panel -->
+  <div class="overlay-panel" id="vnc-touch-mousepad-panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #fbbf24; font-weight: 600;">
+      <span><i class="fa-solid fa-computer-mouse"></i> Touch Mousepad / Trackpad Virtual</span>
+      <span style="font-size: 10px; color: var(--text-muted);">Usap jari/kursor di area kelabu untuk menggerakkan mouse</span>
+    </div>
+
+    <div id="vnc-touchpad-area" style="background: rgba(0,0,0,0.5); border: 1px dashed rgba(245, 158, 11, 0.4); height: 90px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 12px; cursor: move; user-select: none;">
+      <i class="fa-solid fa-hand-pointer" style="margin-right: 6px;"></i> Usap di sini untuk mengarahkan Kursor Mouse
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+      <button type="button" id="btn-click-left" style="padding: 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-weight: bold; font-size: 12px; cursor: pointer;">🖱️ Klik Kiri (Left Click)</button>
+      <button type="button" id="btn-click-right" style="padding: 8px; border-radius: 6px; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; font-weight: bold; font-size: 12px; cursor: pointer;">🖱️ Klik Kanan (Right Click)</button>
+    </div>
   </div>
 
   <!-- Password Entry Modal Overlay -->
@@ -193,7 +408,7 @@
     </div>
   </div>
 
-  <!-- Immediate Query Parsing script -->
+  <!-- Script for Query Parsing and RFB VNC logic -->
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     window.vncIp = urlParams.get('ip') || '127.0.0.1';
@@ -203,7 +418,7 @@
     document.getElementById('lbl-ip').textContent = `IP Target: ${window.vncIp}`;
   </script>
 
-  <!-- ES6 Loader with jsDelivr bundler bundling -->
+  <!-- ES6 Module for RFB and On-Screen Mouse Pointer Tracking -->
   <script type="module">
     import RFB from '/novnc-dist/core/rfb.js';
 
@@ -215,6 +430,37 @@
     const statusLabel = document.getElementById('lbl-status');
 
     let rfb;
+    let vncWidth = 1280;
+    let vncHeight = 720;
+    let cursorX = 640;
+    let cursorY = 360;
+
+    function updatePointerPos(x, y) {
+      cursorX = Math.max(0, Math.min(vncWidth, Math.round(x)));
+      cursorY = Math.max(0, Math.min(vncHeight, Math.round(y)));
+
+      const pointer = document.getElementById('vnc-cursor-pointer');
+      const coords = document.getElementById('vnc-cursor-coords');
+
+      if (pointer && container) {
+        const pctX = (cursorX / vncWidth) * 100;
+        const pctY = (cursorY / vncHeight) * 100;
+        pointer.style.left = `${pctX}%`;
+        pointer.style.top = `${pctY}%`;
+      }
+      if (coords) {
+        coords.textContent = `X: ${cursorX}, Y: ${cursorY}`;
+      }
+    }
+
+    function triggerClickAnimation() {
+      const pointer = document.getElementById('vnc-cursor-pointer');
+      if (pointer) {
+        pointer.style.transform = 'scale(1.4)';
+        setTimeout(() => { pointer.style.transform = 'scale(1)'; }, 150);
+      }
+    }
+
     try {
       rfb = new RFB(container, wsUrl);
 
@@ -222,43 +468,138 @@
         loader.classList.add('hidden');
         statusLabel.className = 'status-badge connected';
         statusLabel.innerHTML = '<i class="fa-solid fa-circle-check"></i> Connected';
+        updatePointerPos(640, 360);
       });
 
       rfb.addEventListener('disconnect', (e) => {
         loader.classList.add('hidden');
         statusLabel.className = 'status-badge disconnected';
         statusLabel.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Disconnected';
-        console.log('noVNC connection closed:', e);
       });
 
-      // Handle VNC Server password requests
       rfb.addEventListener('credentialsrequired', () => {
-        console.log('Credentials requested by VNC server');
         const authModal = document.getElementById('vnc-auth-modal');
         const submitBtn = document.getElementById('btn-submit-pass');
         const passInput = document.getElementById('txt-vnc-password');
-
         authModal.style.display = 'flex';
         passInput.focus();
 
         const submitPass = () => {
-          const pass = passInput.value;
-          rfb.sendCredentials({ password: pass });
+          rfb.sendCredentials({ password: passInput.value });
           authModal.style.display = 'none';
-          // Cleanup events
-          submitBtn.removeEventListener('click', submitPass);
         };
 
-        submitBtn.addEventListener('click', submitPass);
-        passInput.addEventListener('keypress', (event) => {
-          if (event.key === 'Enter') {
-            submitPass();
-          }
-        });
+        submitBtn.onclick = submitPass;
+        passInput.onkeypress = (e) => { if (e.key === 'Enter') submitPass(); };
       });
 
       rfb.scaleViewport = true;
       rfb.resizeSession = true;
+      rfb.showDotCursor = true;
+
+      // Mouse tracking on canvas
+      container.addEventListener('mousemove', (e) => {
+        const rect = container.getBoundingClientRect();
+        const posX = ((e.clientX - rect.left) / rect.width) * vncWidth;
+        const posY = ((e.clientY - rect.top) / rect.height) * vncHeight;
+        updatePointerPos(posX, posY);
+      });
+
+      container.addEventListener('click', () => {
+        triggerClickAnimation();
+      });
+
+      // Auto-Fill Credentials Action
+      document.getElementById('btn-autofill').onclick = () => {
+        const username = 'elektro';
+        const password = 'tlp808rgn443';
+
+        // Type username
+        for (const char of username) {
+          rfb.sendKey(char.charCodeAt(0));
+        }
+        // Press Tab
+        rfb.sendKey(0xFF09); // Tab keysym
+
+        // Type password
+        for (const char of password) {
+          rfb.sendKey(char.charCodeAt(0));
+        }
+        // Press Enter
+        rfb.sendKey(0xFF0D); // Enter keysym
+
+        statusLabel.innerHTML = '<i class="fa-solid fa-key" style="color:#fbbf24;"></i> Credentials Sent!';
+        setTimeout(() => {
+          statusLabel.innerHTML = '<i class="fa-solid fa-circle-check"></i> Connected';
+        }, 2000);
+      };
+
+      // Direct Web Sign In Link
+      document.getElementById('btn-web-signin').onclick = () => {
+        window.open(`http://${window.vncIp}:90/fids/`, '_blank');
+      };
+
+      // Toggle Virtual Keyboard
+      document.getElementById('btn-toggle-kbd').onclick = () => {
+        const kbd = document.getElementById('vnc-virtual-keyboard-panel');
+        kbd.style.display = (kbd.style.display === 'none' || !kbd.style.display) ? 'flex' : 'none';
+      };
+
+      // Toggle Touch Mousepad
+      document.getElementById('btn-toggle-mouse').onclick = () => {
+        const mouse = document.getElementById('vnc-touch-mousepad-panel');
+        mouse.style.display = (mouse.style.display === 'none' || !mouse.style.display) ? 'flex' : 'none';
+      };
+
+      // Virtual Keyboard Click Handlers
+      document.querySelectorAll('.vnc-key').forEach(btn => {
+        btn.onclick = () => {
+          const k = btn.dataset.key;
+          if (k === 'Backspace') rfb.sendKey(0xFF08);
+          else if (k === 'Tab') rfb.sendKey(0xFF09);
+          else if (k === 'Enter') rfb.sendKey(0xFF0D);
+          else if (k === ' ') rfb.sendKey(0x0020);
+          else if (k && k.length === 1) rfb.sendKey(k.charCodeAt(0));
+          triggerClickAnimation();
+        };
+      });
+
+      // Touchpad Dragging Handler
+      const touchpad = document.getElementById('vnc-touchpad-area');
+      let isDragging = false;
+      let lastX = 0, lastY = 0;
+
+      const startDrag = (x, y) => { isDragging = true; lastX = x; lastY = y; };
+      const moveDrag = (x, y) => {
+        if (!isDragging) return;
+        const dx = (x - lastX) * 3;
+        const dy = (y - lastY) * 3;
+        lastX = x;
+        lastY = y;
+        updatePointerPos(cursorX + dx, cursorY + dy);
+      };
+      const stopDrag = () => { isDragging = false; };
+
+      touchpad.onmousedown = (e) => startDrag(e.clientX, e.clientY);
+      window.onmousemove = (e) => moveDrag(e.clientX, e.clientY);
+      window.onmouseup = stopDrag;
+
+      touchpad.ontouchstart = (e) => { if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); };
+      touchpad.ontouchmove = (e) => { if (e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY); };
+      touchpad.ontouchend = stopDrag;
+
+      document.getElementById('btn-click-left').onclick = () => {
+        rfb.sendPointerEvent(cursorX, cursorY, 1);
+        setTimeout(() => rfb.sendPointerEvent(cursorX, cursorY, 0), 100);
+        triggerClickAnimation();
+      };
+
+      document.getElementById('btn-click-right').onclick = () => {
+        rfb.sendPointerEvent(cursorX, cursorY, 4);
+        setTimeout(() => rfb.sendPointerEvent(cursorX, cursorY, 0), 100);
+        triggerClickAnimation();
+      };
+
     } catch (err) {
       loader.classList.add('hidden');
       statusLabel.className = 'status-badge disconnected';
