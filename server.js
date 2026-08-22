@@ -1096,13 +1096,11 @@ async function pingDevice(device) {
 
   // Real-world mapping
   if (isOnline) {
+    newStatus = 'Online';
+    anomalyType = null;
     if (device.status === 'Offline') {
-      newStatus = 'Online';
-      anomalyType = null;
       logMsg = `${device.name} is back online (Health Check: ${healthStatusDetail}).`;
     } else {
-      newStatus = device.status;
-      anomalyType = device.anomaly_type;
       logMsg = `Heartbeat success for ${device.name} via ${healthStatusDetail}`;
     }
     // Clear slow ping and isolated map entries on successful online response
