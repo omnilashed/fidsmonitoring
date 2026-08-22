@@ -44,32 +44,51 @@ function findMatchingIpCluster(ipStr) {
   return null;
 }
 
+function getStandardTabKey(eqType) {
+  if (!eqType || typeof eqType !== 'string') return null;
+  const s = eqType.toLowerCase().trim();
+  if (s.includes('fids')) return 'FIDS';
+  if (s.includes('cctv')) return 'CCTV';
+  if (s.includes('pabx')) return 'IP PABX';
+  if (s.includes('fire') || s.includes('alarm') || s.includes('fas')) return 'Fire Alarm';
+  return null;
+}
+
 function updateEquipmentGroupsFromClusters() {
-  if (!ipClusters) return;
-  
-  ipClusters.forEach(cl => {
-    const eqType = cl.equipment_type;
-    if (!eqType) return;
-    
-    if (eqType.includes('FIDS') && !EQUIPMENT_GROUPS['FIDS'].includes(eqType)) {
-      EQUIPMENT_GROUPS['FIDS'].push(eqType);
-    } else if (eqType.includes('CCTV') && !EQUIPMENT_GROUPS['CCTV'].includes(eqType)) {
-      EQUIPMENT_GROUPS['CCTV'].push(eqType);
-    } else if (eqType.includes('PABX') && !EQUIPMENT_GROUPS['IP PABX'].includes(eqType)) {
-      EQUIPMENT_GROUPS['IP PABX'].push(eqType);
-    } else if (eqType.includes('Fire') && !EQUIPMENT_GROUPS['Fire Alarm'].includes(eqType)) {
-      EQUIPMENT_GROUPS['Fire Alarm'].push(eqType);
-    } else if (!EQUIPMENT_GROUPS[eqType]) {
-      EQUIPMENT_GROUPS[eqType] = [eqType];
+  // Reset standard groups
+  EQUIPMENT_GROUPS['FIDS'] = ['Server FIDS', 'FIDS'];
+  EQUIPMENT_GROUPS['IP PABX'] = ['IP PABX'];
+  EQUIPMENT_GROUPS['CCTV'] = ['Server CCTV', 'CCTV'];
+  EQUIPMENT_GROUPS['Fire Alarm'] = ['Server Fire Alarm System', 'Fire Alarm System'];
+
+  // Remove any stale dynamic keys matching standard tab categories
+  Object.keys(EQUIPMENT_GROUPS).forEach(k => {
+    if (!['FIDS', 'IP PABX', 'CCTV', 'Fire Alarm'].includes(k) && getStandardTabKey(k)) {
+      delete EQUIPMENT_GROUPS[k];
     }
   });
 
-  devices.forEach(d => {
-    const eqType = d.equipment_type;
-    if (eqType && !EQUIPMENT_GROUPS[eqType] && !Object.values(EQUIPMENT_GROUPS).some(arr => arr.includes(eqType))) {
-      EQUIPMENT_GROUPS[eqType] = [eqType];
+  const processEqType = (eqType) => {
+    if (!eqType) return;
+    const stdKey = getStandardTabKey(eqType);
+    if (stdKey) {
+      if (!EQUIPMENT_GROUPS[stdKey].includes(eqType)) {
+        EQUIPMENT_GROUPS[stdKey].push(eqType);
+      }
+    } else {
+      if (!EQUIPMENT_GROUPS[eqType]) {
+        EQUIPMENT_GROUPS[eqType] = [eqType];
+      }
     }
-  });
+  };
+
+  if (ipClusters) {
+    ipClusters.forEach(cl => processEqType(cl.equipment_type));
+  }
+
+  if (devices) {
+    devices.forEach(d => processEqType(d.equipment_type));
+  }
 
   renderDynamicNavTabs();
   updateFormEquipmentTypes();
