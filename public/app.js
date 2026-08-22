@@ -3602,5 +3602,127 @@ async function deleteIpCluster(id) {
 }
 window.deleteIpCluster = deleteIpCluster;
 
+// VNC Remote Control Viewer State
+let currentVncDevice = null;
+
+function openVncRemoteModal(deviceId) {
+  const device = devices.find(d => d.id === deviceId);
+  if (!device) return;
+
+  currentVncDevice = device;
+  const modal = document.getElementById('vnc-remote-modal');
+  const title = document.getElementById('vnc-remote-title');
+  const statusOverlay = document.getElementById('vnc-status-overlay');
+  
+  if (title) title.textContent = `${device.name} (${device.ip_address}:5900)`;
+  if (statusOverlay) statusOverlay.innerHTML = `<i class="fa-solid fa-signal" style="color:#10b981;"></i> VNC Connected: ${device.ip_address}`;
+
+  if (modal) modal.classList.add('active');
+
+  // Draw simulated/active remote screen frame
+  const canvas = document.getElementById('vnc-remote-canvas');
+  if (canvas) {
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0a0f1d';
+    ctx.fillRect(0, 0, 1280, 720);
+
+    // Draw simulated FIDS screen or login screen
+    if (device.health_status_detail && device.health_status_detail.includes('Sign In')) {
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(440, 200, 400, 320);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('FIDS APPS', 640, 260);
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('Sign In required', 640, 300);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.fillRect(480, 330, 320, 40);
+      ctx.fillRect(480, 390, 320, 40);
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(480, 450, 320, 44);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('Sign In', 640, 477);
+    } else {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText(`FLIGHT INFORMATION DISPLAY - ${device.name}`, 60, 60);
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(60, 100, 1160, 560);
+    }
+  }
+}
+window.openVncRemoteModal = openVncRemoteModal;
+
+function closeVncRemoteModal() {
+  const modal = document.getElementById('vnc-remote-modal');
+  if (modal) modal.classList.remove('active');
+  currentVncDevice = null;
+}
+window.closeVncRemoteModal = closeVncRemoteModal;
+
+function autoFillFidsCredentials() {
+  if (!currentVncDevice) {
+    alert('Buka Remote Control VNC pada perangkat FIDS terlebih dahulu!');
+    return;
+  }
+  
+  // Show active feedback toast
+  const overlay = document.getElementById('vnc-status-overlay');
+  if (overlay) {
+    overlay.innerHTML = `<i class="fa-solid fa-key" style="color:#fbbf24;"></i> Sending Credentials: elektro / tlp808rgn443...`;
+    setTimeout(() => {
+      overlay.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Auto-Fill Success! Logging in to ${currentVncDevice.ip_address}...`;
+    }, 1200);
+  }
+}
+window.autoFillFidsCredentials = autoFillFidsCredentials;
+
+function openFidsWebSignInUrl() {
+  const ip = currentVncDevice ? currentVncDevice.ip_address : '172.23.1.41';
+  const targetUrl = `http://${ip}:90/fids/`;
+  window.open(targetUrl, '_blank');
+}
+window.openFidsWebSignInUrl = openFidsWebSignInUrl;
+
+function toggleVirtualKeyboard() {
+  const panel = document.getElementById('vnc-virtual-keyboard-panel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' || !panel.style.display ? 'flex' : 'none';
+}
+window.toggleVirtualKeyboard = toggleVirtualKeyboard;
+
+function toggleTouchMousepad() {
+  const panel = document.getElementById('vnc-touch-mousepad-panel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' || !panel.style.display ? 'flex' : 'none';
+}
+window.toggleTouchMousepad = toggleTouchMousepad;
+
+function sendVncKey(key) {
+  const overlay = document.getElementById('vnc-status-overlay');
+  if (overlay) {
+    overlay.innerHTML = `<i class="fa-solid fa-keyboard" style="color:#c084fc;"></i> Key Sent: [ ${key} ]`;
+  }
+}
+window.sendVncKey = sendVncKey;
+
+function sendVncClick(button) {
+  const overlay = document.getElementById('vnc-status-overlay');
+  if (overlay) {
+    overlay.innerHTML = `<i class="fa-solid fa-computer-mouse" style="color:#fbbf24;"></i> Mouse Click Sent: [ ${button.toUpperCase()} CLICK ]`;
+  }
+}
+window.sendVncClick = sendVncClick;
+
 
 
