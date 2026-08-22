@@ -252,7 +252,7 @@
       <div class="summary-card glass">
         <div class="card-icon blue"><i class="fa-solid fa-tv"></i></div>
         <div class="card-data">
-          <h3>Total FIDS Displays</h3>
+          <h3 id="total-fids-card-title">Total FIDS Displays</h3>
           <p id="total-fids" class="counter">0</p>
           <span class="card-info">Monitored IP targets</span>
         </div>
@@ -305,11 +305,20 @@
             <button id="btn-grid-mode" class="toggle-btn active"><i class="fa-solid fa-grip"></i> Grid Mode</button>
             <button id="btn-map-mode" class="toggle-btn"><i class="fa-solid fa-map-location-dot"></i> Map Mode</button>
           </div>
-          <div class="terminal-filters">
+          <div class="terminal-filters" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <button class="filter-btn active" data-terminal="ALL">All Terminal</button>
             <button class="filter-btn" data-terminal="T1">Terminal 1</button>
             <button class="filter-btn" data-terminal="T2">Perkantoran Bandara</button>
             <button class="filter-btn" data-terminal="T3">Luar Gedung Terminal</button>
+            <select id="status-filter" onchange="onStatusFilterChange()" style="padding: 6px 12px; border-radius: 6px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.15); color: #fff; font-size: 12px; outline: none; cursor: pointer;">
+              <option value="ALL">All Statuses</option>
+              <option value="Online">Online</option>
+              <option value="Offline">Offline (Active)</option>
+              <option value="Anomaly">Anomaly</option>
+              <option value="Suspended">Offline Priority (All Suspended)</option>
+              <option value="Suspended-Rusak">Suspended - Rusak</option>
+              <option value="Suspended-Maintenance">Suspended - Maintenance</option>
+            </select>
           </div>
         </div>
 
@@ -781,6 +790,56 @@
   </div>
 
 
+  <!-- Modal Suspend Device with Reason Selection -->
+  <div id="suspend-modal" class="modal-overlay" onclick="if(event.target === this) closeSuspendModal()">
+    <div class="modal-content glass" style="max-width: 480px; padding: 24px; border: 1px solid rgba(244, 63, 94, 0.3);">
+      <div class="modal-header" style="margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <h2 style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 0; color: #fff;">
+          <i class="fa-solid fa-ban" style="color: #f43f5e;"></i> Suspend Device Monitoring
+        </h2>
+        <button onclick="closeSuspendModal()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="suspend-modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="suspend-target-device-id">
+        <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+          <strong id="suspend-modal-device-name" style="font-size: 15px; display: block; color: #fff;">Device Name</strong>
+          <span id="suspend-modal-device-ip" style="font-size: 12px; color: var(--text-muted); font-family: monospace;">172.23.5.10</span>
+        </div>
+
+        <div>
+          <label style="font-size: 13px; font-weight: 600; color: #e2e8f0; display: block; margin-bottom: 8px;">Pilih Alasan Suspend / Maintenance:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <label class="suspend-reason-option" style="display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); cursor: pointer; transition: all 0.2s;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="suspend-reason" value="Rusak" checked style="accent-color: #ef4444;">
+                <strong style="color: #f87171; font-size: 13px;"><i class="fa-solid fa-triangle-exclamation"></i> Rusak</strong>
+              </div>
+              <span style="font-size: 10px; color: var(--text-muted); padding-left: 24px;">Hardware / Display Error</span>
+            </label>
+
+            <label class="suspend-reason-option" style="display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 8px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); cursor: pointer; transition: all 0.2s;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="suspend-reason" value="Maintenance" style="accent-color: #f59e0b;">
+                <strong style="color: #fbbf24; font-size: 13px;"><i class="fa-solid fa-screwdriver-wrench"></i> Maintenance</strong>
+              </div>
+              <span style="font-size: 10px; color: var(--text-muted); padding-left: 24px;">Pemeliharaan Rutin</span>
+            </label>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="suspend-note" style="font-size: 12px; color: var(--text-muted);">Catatan Maintenance / Keterangan (Opsional):</label>
+          <textarea id="suspend-note" placeholder="Contoh: Menunggu unit penggantian..." style="padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 12px; resize: vertical; min-height: 60px; outline: none;"></textarea>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+          <button type="button" onclick="closeSuspendModal()" style="padding: 8px 16px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; cursor: pointer; font-size: 13px;">Batal</button>
+          <button type="button" onclick="submitDeviceSuspend()" style="padding: 8px 18px; border-radius: 6px; background: rgba(244, 63, 94, 0.25); border: 1px solid rgba(244, 63, 94, 0.4); color: #f43f5e; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-ban"></i> Confirm Suspend</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Administrative Session Auth Login Modal -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-content glass" style="max-width: 400px; padding: 24px; border: 1px solid rgba(56, 189, 248, 0.2);">
@@ -915,9 +974,9 @@
           <!-- Stream display area -->
           <div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#000;">
             <!-- MJPEG live img -->
-            <img id="cctv-mjpeg-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;display:none;" onerror="onMjpegImgError()">
+            <img id="cctv-mjpeg-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;display:none;" onerror="if(window.onMjpegImgError) window.onMjpegImgError()">
             <!-- Snapshot img (refreshed periodically) -->
-            <img id="cctv-snapshot-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;display:none;" onerror="onSnapshotImgError()">
+            <img id="cctv-snapshot-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;display:none;" onerror="if(window.onSnapshotImgError) window.onSnapshotImgError()">
             <!-- No stream selected placeholder -->
             <div id="stream-placeholder" style="text-align:center;color:var(--text-muted);">
               <i class="fa-solid fa-film" style="font-size:40px;opacity:0.3;margin-bottom:12px;display:block;"></i>
@@ -934,7 +993,7 @@
 
         <!-- Web UI iframe -->
         <iframe id="cctv-view-iframe" src="" style="width:100%;height:100%;border:none;display:block;"
-          onload="onCctvIframeLoad()" onerror="onCctvIframeError()">
+          onload="if(window.onCctvIframeLoad) window.onCctvIframeLoad()" onerror="if(window.onCctvIframeError) window.onCctvIframeError()">
         </iframe>
 
       </div>

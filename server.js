@@ -2724,7 +2724,7 @@ app.put('/api/devices/:id', verifyAdmin, async (req, res) => {
 
 // Manual Suspend: Suspend background monitoring for a device
 app.post('/api/suspend-device', async (req, res) => {
-  const { deviceId } = req.body;
+  const { deviceId, reason, note } = req.body;
   if (!deviceId) {
     return res.status(400).json({ error: 'deviceId is required' });
   }
@@ -2740,13 +2740,16 @@ app.post('/api/suspend-device', async (req, res) => {
 
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
-    // Set status to Offline, health_status_detail to 'Suspended (Manual)'
+    const suspendReason = (reason === 'Rusak' || reason === 'Maintenance') ? reason : 'Manual';
+    const detailString = `Suspended (${suspendReason})`;
+
+    // Set status to Offline, health_status_detail to detailString
     // and offline_since to 15 minutes ago so it is immediately suspended
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     const updatedDevice = {
       ...device,
       status: 'Offline',
-      health_status_detail: 'Suspended (Manual)',
+      health_status_detail: detailString,
       offline_since: fifteenMinutesAgo
     };
 
@@ -2758,12 +2761,13 @@ app.post('/api/suspend-device', async (req, res) => {
       }
     } else {
       await pool.query(
-        `UPDATE devices SET status = 'Offline', health_status_detail = 'Suspended (Manual)', offline_since = ? WHERE id = ?`,
-        [fifteenMinutesAgo, device.id]
+        `UPDATE devices SET status = 'Offline', health_status_detail = ?, offline_since = ? WHERE id = ?`,
+        [detailString, fifteenMinutesAgo, device.id]
       );
     }
 
-    await logStatusChange(device.id, 'Offline', `Operator manual action: Device suspended from active background monitoring.`);
+    const noteText = note ? ` Note: ${note}` : '';
+    await logStatusChange(device.id, 'Offline', `Operator manual action: Device suspended (${suspendReason}).${noteText}`);
     broadcast({ type: 'DEVICE_UPDATED', device: updatedDevice });
 
     res.json({ success: true, device: updatedDevice });
@@ -2790,9 +2794,10 @@ app.post('/api/resume-device', async (req, res) => {
 
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
-    // Reset offline_since to NULL
+    // Reset health_status_detail and offline_since to NULL
     const updatedDevice = {
       ...device,
+      health_status_detail: null,
       offline_since: null
     };
 
@@ -2804,7 +2809,7 @@ app.post('/api/resume-device', async (req, res) => {
       }
     } else {
       await pool.query(
-        `UPDATE devices SET offline_since = NULL WHERE id = ?`,
+        `UPDATE devices SET health_status_detail = NULL, offline_since = NULL WHERE id = ?`,
         [device.id]
       );
     }
