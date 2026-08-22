@@ -3619,6 +3619,10 @@ function openVncRemoteModal(deviceId) {
 
   if (modal) modal.classList.add('active');
 
+  // Initialize mouse pointer position
+  updateOnScreenMousePointer(640, 360);
+  setupVncMouseListeners();
+
   // Draw simulated/active remote screen frame
   const canvas = document.getElementById('vnc-remote-canvas');
   if (canvas) {
@@ -3670,6 +3674,88 @@ function closeVncRemoteModal() {
 }
 window.closeVncRemoteModal = closeVncRemoteModal;
 
+let vncCursorX = 640;
+let vncCursorY = 360;
+let isVncMouseListenersSetup = false;
+
+function updateOnScreenMousePointer(x, y) {
+  vncCursorX = Math.max(0, Math.min(1280, Math.round(x)));
+  vncCursorY = Math.max(0, Math.min(720, Math.round(y)));
+
+  const pointer = document.getElementById('vnc-cursor-pointer');
+  const coords = document.getElementById('vnc-cursor-coords');
+  const container = document.getElementById('vnc-viewport-container');
+
+  if (pointer && container) {
+    const pctX = (vncCursorX / 1280) * 100;
+    const pctY = (vncCursorY / 720) * 100;
+
+    pointer.style.left = `${pctX}%`;
+    pointer.style.top = `${pctY}%`;
+  }
+
+  if (coords) {
+    coords.textContent = `X: ${vncCursorX}, Y: ${vncCursorY}`;
+  }
+}
+
+function setupVncMouseListeners() {
+  if (isVncMouseListenersSetup) return;
+  const canvas = document.getElementById('vnc-remote-canvas');
+  if (!canvas) return;
+
+  isVncMouseListenersSetup = true;
+
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = 1280 / rect.width;
+    const scaleY = 720 / rect.height;
+    const posX = (e.clientX - rect.left) * scaleX;
+    const posY = (e.clientY - rect.top) * scaleY;
+    updateOnScreenMousePointer(posX, posY);
+  });
+
+  canvas.addEventListener('click', () => {
+    sendVncClick('left');
+  });
+
+  // Touchpad dragging listeners
+  const touchpad = document.getElementById('vnc-touchpad-area');
+  if (touchpad) {
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+
+    const startDrag = (clientX, clientY) => {
+      isDragging = true;
+      lastX = clientX;
+      lastY = clientY;
+    };
+
+    const moveDrag = (clientX, clientY) => {
+      if (!isDragging) return;
+      const deltaX = (clientX - lastX) * 2.5;
+      const deltaY = (clientY - lastY) * 2.5;
+      lastX = clientX;
+      lastY = clientY;
+      updateOnScreenMousePointer(vncCursorX + deltaX, vncCursorY + deltaY);
+    };
+
+    const stopDrag = () => { isDragging = false; };
+
+    touchpad.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+    window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+    window.addEventListener('mouseup', stopDrag);
+
+    touchpad.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+    });
+    touchpad.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+    });
+    touchpad.addEventListener('touchend', stopDrag);
+  }
+}
+
 function autoFillFidsCredentials() {
   if (!currentVncDevice) {
     alert('Buka Remote Control VNC pada perangkat FIDS terlebih dahulu!');
@@ -3719,7 +3805,14 @@ window.sendVncKey = sendVncKey;
 function sendVncClick(button) {
   const overlay = document.getElementById('vnc-status-overlay');
   if (overlay) {
-    overlay.innerHTML = `<i class="fa-solid fa-computer-mouse" style="color:#fbbf24;"></i> Mouse Click Sent: [ ${button.toUpperCase()} CLICK ]`;
+    overlay.innerHTML = `<i class="fa-solid fa-computer-mouse" style="color:#fbbf24;"></i> Mouse Click Sent: [ ${button.toUpperCase()} CLICK at X:${vncCursorX}, Y:${vncCursorY} ]`;
+  }
+
+  // Animate pulse click effect on cursor pointer
+  const pointer = document.getElementById('vnc-cursor-pointer');
+  if (pointer) {
+    pointer.style.transform = 'scale(1.4)';
+    setTimeout(() => { pointer.style.transform = 'scale(1)'; }, 150);
   }
 }
 window.sendVncClick = sendVncClick;

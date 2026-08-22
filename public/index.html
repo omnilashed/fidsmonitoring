@@ -993,6 +993,13 @@
       <!-- Main Remote Viewport Screen -->
       <div id="vnc-viewport-container" style="background: #000; border-radius: 8px; min-height: 360px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
         <canvas id="vnc-remote-canvas" style="width: 100%; max-height: 480px; object-fit: contain; cursor: crosshair; display: block;"></canvas>
+        
+        <!-- On-Screen Mouse Cursor Pointer Overlay -->
+        <div id="vnc-cursor-pointer" style="position: absolute; top: 50%; left: 50%; pointer-events: none; transform: translate(0, 0); transition: top 0.04s ease-out, left 0.04s ease-out; z-index: 10;">
+          <i class="fa-solid fa-arrow-pointer" style="color: #ef4444; font-size: 22px; text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 12px rgba(239,68,68,0.8); filter: drop-shadow(1px 2px 4px rgba(0,0,0,0.9)); transform: rotate(-25deg); display: block;"></i>
+          <span id="vnc-cursor-coords" style="position: absolute; left: 16px; top: 16px; background: rgba(0,0,0,0.85); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-family: monospace; white-space: nowrap; border: 1px solid rgba(251,191,36,0.3);">X: 640, Y: 360</span>
+        </div>
+
         <div id="vnc-status-overlay" style="position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px; font-size: 11px; color: #38bdf8; font-family: monospace;">
           <i class="fa-solid fa-signal"></i> Connecting VNC Port 5900...
         </div>
