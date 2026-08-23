@@ -2797,10 +2797,14 @@ function renderBatchesVisualizer() {
     return;
   }
 
-  // Slice devices list into batches
+  // Store batch slices globally for modal lookup
+  window.currentBatchSlices = [];
+
   let batchIndex = 1;
   for (let i = 0; i < totalDevices; i += batchSize) {
     const batchDevices = devices.slice(i, i + batchSize);
+    window.currentBatchSlices.push(batchDevices);
+    const currentBatchIdx = batchIndex - 1;
     
     const card = document.createElement('div');
     card.className = 'glass';
@@ -2810,6 +2814,7 @@ function renderBatchesVisualizer() {
     card.style.display = 'flex';
     card.style.flexDirection = 'column';
     card.style.gap = '8px';
+    card.style.transition = 'all 0.2s';
     
     // Group status
     const onlineCount = batchDevices.filter(d => d.status === 'Online').length;
@@ -2818,20 +2823,125 @@ function renderBatchesVisualizer() {
 
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
-        <strong style="color:#c084fc; font-size:13px;">Group Batch #${batchIndex}</strong>
-        <span style="font-size:10px; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:3px; color:var(--text-muted);">${batchDevices.length} Devs</span>
+        <strong style="color:#c084fc; font-size:13px;"><i class="fa-solid fa-layer-group"></i> Batch #${batchIndex}</strong>
+        <span style="font-size:10px; background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.3); padding:1px 6px; border-radius:4px; color:#c084fc; font-weight:600;">${batchDevices.length} Devs</span>
       </div>
       <div style="font-size:11px; display:flex; flex-direction:column; gap:3px;">
         <div style="display:flex; justify-content:space-between;"><span>🟢 Online:</span> <span>${onlineCount}</span></div>
         <div style="display:flex; justify-content:space-between;"><span>🔴 Offline:</span> <span style="color:${offlineCount > 0 ? '#f87171' : 'inherit'};">${offlineCount}</span></div>
         <div style="display:flex; justify-content:space-between;"><span>⚠️ Anomaly:</span> <span style="color:${anomalyCount > 0 ? '#fbbf24' : 'inherit'};">${anomalyCount}</span></div>
       </div>
+      <button onclick="openBatchDetailModal(${currentBatchIdx})" style="margin-top:4px; padding:6px 10px; border-radius:6px; background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.3); color:#c084fc; font-size:11px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;" onmouseover="this.style.background='rgba(192,132,252,0.25)'" onmouseout="this.style.background='rgba(192,132,252,0.15)'">
+        <i class="fa-solid fa-rectangle-list"></i> Detail Perangkat (${batchDevices.length})
+      </button>
     `;
     container.appendChild(card);
     batchIndex++;
   }
 }
 window.renderBatchesVisualizer = renderBatchesVisualizer;
+
+// ─── Group Batch Detail Modal Functions ─────────────────────────────────────
+let activeBatchDevices = [];
+
+function openBatchDetailModal(batchIdx) {
+  if (!window.currentBatchSlices || !window.currentBatchSlices[batchIdx]) return;
+
+  activeBatchDevices = window.currentBatchSlices[batchIdx];
+  const modal = document.getElementById('batch-detail-modal');
+  const title = document.getElementById('batch-detail-title');
+  const searchInput = document.getElementById('batch-detail-search-input');
+  
+  if (searchInput) searchInput.value = '';
+  if (title) title.textContent = `Group Batch #${batchIdx + 1} Device Details (${activeBatchDevices.length} Perangkat)`;
+
+  const total = activeBatchDevices.length;
+  const online = activeBatchDevices.filter(d => d.status === 'Online').length;
+  const offline = activeBatchDevices.filter(d => d.status === 'Offline').length;
+  const anomaly = activeBatchDevices.filter(d => d.status === 'Anomaly').length;
+
+  document.getElementById('batch-detail-total-count').textContent = total;
+  document.getElementById('batch-detail-online-count').textContent = online;
+  document.getElementById('batch-detail-offline-count').textContent = offline;
+  document.getElementById('batch-detail-anomaly-count').textContent = anomaly;
+
+  renderBatchDetailTableBody(activeBatchDevices);
+
+  if (modal) modal.classList.add('active');
+}
+window.openBatchDetailModal = openBatchDetailModal;
+
+function closeBatchDetailModal() {
+  const modal = document.getElementById('batch-detail-modal');
+  if (modal) modal.classList.remove('active');
+  activeBatchDevices = [];
+}
+window.closeBatchDetailModal = closeBatchDetailModal;
+
+function filterBatchDetailDevices() {
+  const query = (document.getElementById('batch-detail-search-input').value || '').toLowerCase().trim();
+  if (!query) {
+    renderBatchDetailTableBody(activeBatchDevices);
+    return;
+  }
+  const filtered = activeBatchDevices.filter(d => 
+    (d.name && d.name.toLowerCase().includes(query)) ||
+    (d.ip_address && d.ip_address.toLowerCase().includes(query)) ||
+    (d.equipment_type && d.equipment_type.toLowerCase().includes(query)) ||
+    (d.terminal && d.terminal.toLowerCase().includes(query))
+  );
+  renderBatchDetailTableBody(filtered);
+}
+window.filterBatchDetailDevices = filterBatchDetailDevices;
+
+function renderBatchDetailTableBody(deviceList) {
+  const tbody = document.getElementById('batch-detail-table-body');
+  if (!tbody) return;
+
+  if (!deviceList || deviceList.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:16px; color:var(--text-muted);">Tidak ada perangkat yang cocok dalam batch ini.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = deviceList.map((d, index) => {
+    let statusBadge = `<span class="table-tag text-green">🟢 Online</span>`;
+    const isSusp = isDeviceSuspended(d) || (d.health_status_detail && d.health_status_detail.startsWith('Suspended'));
+    
+    if (isSusp) {
+      statusBadge = `<span class="table-tag text-red">🛑 Suspended</span>`;
+    } else if (d.health_status_detail === 'Isolated (Low Ping)') {
+      statusBadge = `<span class="table-tag" style="color:#c084fc;">🛡️ Isolated</span>`;
+    } else if (d.status === 'Offline') {
+      statusBadge = `<span class="table-tag text-red">🔴 Offline</span>`;
+    } else if (d.status === 'Anomaly') {
+      statusBadge = `<span class="table-tag text-yellow">⚠️ ${d.anomaly_type || 'Anomaly'}</span>`;
+    }
+
+    const latencyText = (d.status === 'Online' && d.latency_ms !== null) ? `${d.latency_ms} ms` : '-';
+
+    return `
+      <tr>
+        <td style="text-align:center; color:var(--text-muted); font-size:11px;">${index + 1}</td>
+        <td><strong style="color:#fff;">${d.name}</strong></td>
+        <td><span style="font-family:monospace; color:#38bdf8;">${d.ip_address}</span></td>
+        <td><span class="table-tag">${d.equipment_type || '-'}</span></td>
+        <td><span class="table-tag">${d.terminal || '-'}</span></td>
+        <td>${statusBadge}</td>
+        <td style="font-family:monospace;">${latencyText}</td>
+        <td style="text-align:center;">
+          <button onclick="openPingModal('${d.ip_address}', '${d.name}', '${d.terminal}')" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:10px; margin-right:4px;" title="Ping Diagnostic">
+            <i class="fa-solid fa-terminal"></i> Ping
+          </button>
+          ${(d.equipment_type && (d.equipment_type.includes('FIDS') || d.equipment_type.includes('CCTV'))) ? 
+            `<button onclick="openRemoteVnc('${d.ip_address}', '${d.name}')" style="background:rgba(192,132,252,0.15); color:#c084fc; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:10px;" title="Remote VNC">
+              <i class="fa-solid fa-desktop"></i> Remote
+            </button>` : ''
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
 
 function testTelegramAlert() {
   const telegramToken = document.getElementById('cfg-tg-token').value;
