@@ -1156,6 +1156,55 @@
     </div>
   </div>
 
+  <!-- Modal Group Batch Detail -->
+  <div id="batch-detail-modal" class="modal-overlay" onclick="if(event.target === this) closeBatchDetailModal()">
+    <div class="modal-content glass" style="max-width: 780px; width: 92%; padding: 24px; border: 1px solid rgba(192, 132, 252, 0.3);">
+      <div class="modal-header" style="margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 0; color: #fff;">
+          <i class="fa-solid fa-layer-group" style="color: #c084fc;"></i> <span id="batch-detail-title">Group Batch #1 Device Details</span>
+        </h2>
+        <button onclick="closeBatchDetailModal()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Top Summary Info & Search Filter -->
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+          <div style="font-size: 12px; color: var(--text-muted);" id="batch-detail-summary-info">
+            Total Perangkat: <strong style="color:#fff;" id="batch-detail-total-count">0</strong> | 
+            🟢 <span id="batch-detail-online-count" style="color:#10b981;">0</span> | 
+            🔴 <span id="batch-detail-offline-count" style="color:#f87171;">0</span> | 
+            ⚠️ <span id="batch-detail-anomaly-count" style="color:#fbbf24;">0</span>
+          </div>
+          <div style="position: relative; width: 220px;">
+            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 11px;"></i>
+            <input type="text" id="batch-detail-search-input" placeholder="Cari nama, IP, atau jenis..." oninput="filterBatchDetailDevices()" style="width: 100%; padding: 6px 10px 6px 28px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 11px; box-sizing: border-box;">
+          </div>
+        </div>
+
+        <!-- Devices List Table -->
+        <div class="table-responsive" style="max-height: 380px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+          <table class="premium-table" style="font-size: 12px;">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                <th>Nama Perangkat</th>
+                <th>Alamat IP</th>
+                <th>Kategori</th>
+                <th>Terminal</th>
+                <th>Status</th>
+                <th>Latensi</th>
+                <th style="text-align: center;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="batch-detail-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Administrative Session Auth Login Modal -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-content glass" style="max-width: 400px; padding: 24px; border: 1px solid rgba(56, 189, 248, 0.2);">
